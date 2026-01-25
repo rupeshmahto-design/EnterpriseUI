@@ -182,10 +182,10 @@ def extract_text_from_file(uploaded_file):
 
 def create_pdf_download(report_content, project_name):
     """Create a PDF download using ReportLab (pure Python, no system deps)"""
-    from reportlab.lib.pagesizes import letter, A4
+    from reportlab.lib.pagesizes import letter
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import inch
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, Table, TableStyle
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
     import re
@@ -195,43 +195,46 @@ def create_pdf_download(report_content, project_name):
     
     # Create PDF buffer
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.75*inch, bottomMargin=0.75*inch)
+    doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.75*inch, bottomMargin=0.75*inch,
+                           leftMargin=0.75*inch, rightMargin=0.75*inch)
     
     # Styles
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
         'CustomTitle',
         parent=styles['Heading1'],
-        fontSize=20,
+        fontSize=18,
         textColor=colors.HexColor('#1a202c'),
         spaceAfter=12,
-        alignment=TA_CENTER
+        spaceBefore=6,
+        alignment=TA_CENTER,
+        fontName='Helvetica-Bold'
     )
     heading1_style = ParagraphStyle(
         'CustomHeading1',
         parent=styles['Heading1'],
-        fontSize=16,
+        fontSize=14,
         textColor=colors.HexColor('#2d3748'),
         spaceBefore=12,
         spaceAfter=6,
-        borderWidth=2,
-        borderColor=colors.HexColor('#cbd5e0'),
-        borderPadding=4
+        fontName='Helvetica-Bold'
     )
     heading2_style = ParagraphStyle(
         'CustomHeading2',
         parent=styles['Heading2'],
-        fontSize=13,
+        fontSize=11,
         textColor=colors.HexColor('#2c5282'),
-        spaceBefore=10,
-        spaceAfter=4
+        spaceBefore=8,
+        spaceAfter=4,
+        fontName='Helvetica-Bold'
     )
     body_style = ParagraphStyle(
         'CustomBody',
         parent=styles['BodyText'],
-        fontSize=10,
-        alignment=TA_JUSTIFY,
-        spaceAfter=6
+        fontSize=9,
+        leading=11,
+        alignment=TA_LEFT,
+        spaceAfter=4
     )
     
     # Build content
@@ -239,103 +242,169 @@ def create_pdf_download(report_content, project_name):
     
     # Title page
     story.append(Paragraph("Threat Assessment Report", title_style))
-    story.append(Spacer(1, 0.2*inch))
+    story.append(Spacer(1, 0.15*inch))
     story.append(Paragraph(f"<b>Project:</b> {project_name}", body_style))
     story.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%B %d, %Y')}", body_style))
-    story.append(Spacer(1, 0.5*inch))
+    story.append(Spacer(1, 0.3*inch))
     
-    # Parse markdown content and convert to PDF elements
+    # Parse markdown content
     lines = report_content.split('\n')
-    current_table_data = []
+    current_table = []
     in_table = False
     
-    for line in lines:
-        line = line.strip()
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
         
-        # Skip empty lines in tables
-        if not line and not in_table:
-            story.append(Spacer(1, 0.1*inch))
+        # Skip table separator lines (---|---|---)
+        if re.match(r'^[\|\s\-:]+$', line) and '|' in line:
+            i += 1
+            continue
+        
+        # Empty lines
+        if not line:
+            if not in_table:
+                story.append(Spacer(1, 0.08*inch))
+            i += 1
             continue
         
         # Headers
-        if line.startswith('# '):
-            if current_table_data:
-                story.append(create_table(current_table_data))
-                current_table_data = []
+        if line.startswith('# ') and not line.startswith('## '):
+            if current_table:
+                table_element = create_reportlab_table(current_table)
+                if table_element:
+                    story.append(table_element)
+                current_table = []
                 in_table = False
-            story.append(Spacer(1, 0.2*inch))
+            story.append(Spacer(1, 0.15*inch))
             story.append(Paragraph(line[2:], title_style))
-        elif line.startswith('## '):
-            if current_table_data:
-                story.append(create_table(current_table_data))
-                current_table_data = []
+        elif line.startswith('## ') and not line.startswith('### '):
+            if current_table:
+                table_element = create_reportlab_table(current_table)
+                if table_element:
+                    story.append(table_element)
+                current_table = []
                 in_table = False
             story.append(Paragraph(line[3:], heading1_style))
         elif line.startswith('### '):
-            if current_table_data:
-                story.append(create_table(current_table_data))
-                current_table_data = []
+            if current_table:
+                table_element = create_reportlab_table(current_table)
+                if table_element:
+                    story.append(table_element)
+                current_table = []
                 in_table = False
             story.append(Paragraph(line[4:], heading2_style))
         
-        # Table detection
-        elif '|' in line and line.startswith('|'):
+        # Table rows
+        elif '|' in line and line.count('|') >= 2:
             in_table = True
-            # Parse table row
-            cells = [cell.strip() for cell in line.split('|')[1:-1]]
-            current_table_data.append(cells)
-        elif line.startswith('---') or line.startswith('==='):
-            continue  # Skip separator lines
+            cells = [cell.strip() for cell in line.split('|') if cell.strip()]
+            if cells:  # Only add non-empty rows
+                current_table.append(cells)
         
         # Regular text
-        elif line and not in_table:
-            if current_table_data:
-                story.append(create_table(current_table_data))
-                current_table_data = []
+        else:
+            if in_table and current_table:
+                table_element = create_reportlab_table(current_table)
+                if table_element:
+                    story.append(table_element)
+                current_table = []
                 in_table = False
             
-            # Bold text
+            # Format inline markdown
             line = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', line)
-            # Code
-            line = re.sub(r'`(.+?)`', r'<font face="Courier">\1</font>', line)
+            line = re.sub(r'`(.+?)`', r'<font face="Courier" size="8">\1</font>', line)
+            # Escape special XML chars
+            line = line.replace('&', '&amp;').replace('<b>', '<<<B>>>').replace('</b>', '<<</B>>>').replace('<font', '<<<FONT').replace('</font>', '<<</FONT>>>')
+            line = line.replace('<<<B>>>', '<b>').replace('<<</B>>>', '</b>').replace('<<<FONT', '<font').replace('<<</FONT>>>', '</font>')
             
-            story.append(Paragraph(line, body_style))
+            try:
+                story.append(Paragraph(line, body_style))
+            except:
+                # Fallback for problematic lines
+                story.append(Paragraph(line.replace('<', '&lt;').replace('>', '&gt;'), body_style))
+        
+        i += 1
     
-    # Add any remaining table
-    if current_table_data:
-        story.append(create_table(current_table_data))
+    # Add remaining table
+    if current_table:
+        table_element = create_reportlab_table(current_table)
+        if table_element:
+            story.append(table_element)
     
     # Build PDF
-    doc.build(story)
-    pdf_bytes = buffer.getvalue()
-    buffer.close()
-    
-    return pdf_filename, pdf_bytes, "application/pdf"
+    try:
+        doc.build(story)
+        pdf_bytes = buffer.getvalue()
+        buffer.close()
+        return pdf_filename, pdf_bytes, "application/pdf"
+    except Exception as e:
+        buffer.close()
+        # Fallback to markdown
+        return f"{base}.md", report_content, "text/markdown"
 
 
-def create_table(table_data):
+def create_reportlab_table(table_data):
     """Helper to create formatted table for ReportLab"""
     from reportlab.platypus import Table, TableStyle
     from reportlab.lib import colors
+    from reportlab.platypus import Paragraph
+    from reportlab.lib.styles import getSampleStyleSheet
     
-    if not table_data:
+    if not table_data or len(table_data) < 1:
         return None
     
-    # Style the table
+    # Wrap cells in Paragraphs for better text wrapping
+    styles = getSampleStyleSheet()
+    cell_style = styles['BodyText']
+    cell_style.fontSize = 7
+    cell_style.leading = 9
+    
+    wrapped_data = []
+    for row in table_data:
+        wrapped_row = []
+        for cell in row:
+            # Clean and wrap cell text
+            cell_text = str(cell).strip()
+            cell_text = cell_text.replace('**', '<b>').replace('**', '</b>')
+            try:
+                wrapped_row.append(Paragraph(cell_text, cell_style))
+            except:
+                wrapped_row.append(cell_text)
+        wrapped_data.append(wrapped_row)
+    
+    # Calculate column widths based on content
+    num_cols = len(wrapped_data[0]) if wrapped_data else 1
+    available_width = 7 * inch  # Letter page width minus margins
+    col_width = available_width / num_cols
+    col_widths = [col_width] * num_cols
+    
+    # Create table with style
+    table = Table(wrapped_data, colWidths=col_widths, repeatRows=1)
+    
     style = TableStyle([
+        # Header row
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2d3748')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 9),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f7fafc')),
+        ('FONTSIZE', (0, 0), (-1, 0), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+        ('TOPPADDING', (0, 0), (-1, 0), 6),
+        # Body
+        ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+        ('FONTSIZE', (0, 1), (-1, -1), 7),
+        ('TOPPADDING', (0, 1), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        # Grid
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e0')),
-        ('FONTSIZE', (0, 1), (-1, -1), 8),
+        # Alternate row colors
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f7fafc')])
     ])
     
-    table = Table(table_data, repeatRows=1)
     table.setStyle(style)
     return table
 
