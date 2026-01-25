@@ -17,8 +17,14 @@ from sqlalchemy.orm import Session
 
 import admin_dashboard
 from auth import PasswordAuth
-from database import SessionLocal
+from database import SessionLocal, init_db
 from models import ThreatAssessment, User
+
+# Initialize database tables on startup
+try:
+    init_db()
+except Exception as e:
+    print(f"Database initialization: {e}")
 
 # Page configuration
 st.set_page_config(
