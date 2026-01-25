@@ -604,25 +604,49 @@ For each relevant category in {framework}, provide detailed analysis:
   - Coverage: {', '.join(FRAMEWORKS[framework]['coverage'][:3])}...
 
 **Security Standards & Guidelines:**
-- NIST SP 800-53 Rev 5 - Security and Privacy Controls for Information Systems and Organizations
-- OWASP Top 10 2021 - Top 10 Web Application Security Risks
-- MITRE ATT&CK Framework - Adversary Tactics, Techniques, and Common Knowledge
-- CIS Critical Security Controls v8 - Critical Security Controls for Effective Cyber Defense
-- ISO/IEC 27001:2013 - Information Security Management Systems Requirements
+- [NIST SP 800-53 Rev 5](https://csrc.nist.gov/publications/detail/sp/800-53/rev-5/final) - Security and Privacy Controls for Information Systems and Organizations
+- [OWASP Top 10 2021](https://owasp.org/www-project-top-ten/) - Top 10 Web Application Security Risks
+- [MITRE ATT&CK Framework](https://attack.mitre.org/) - Adversary Tactics, Techniques, and Common Knowledge
+- [CIS Critical Security Controls v8](https://www.cisecurity.org/controls/v8) - Critical Security Controls for Effective Cyber Defense
+- [ISO/IEC 27001:2013](https://www.iso.org/standard/54534.html) - Information Security Management Systems Requirements
 
 **Compliance Frameworks:**
 {chr(10).join([f"- **{req}** - Regulatory compliance framework" for req in project_info['compliance']])}
 
 **Risk Assessment Methodologies:**
-- CVSS v3.1 - Common Vulnerability Scoring System
-- FAIR - Factor Analysis of Information Risk
-- NIST Risk Management Framework (RMF)
+- [CVSS v3.1](https://www.first.org/cvss/v3.1/specification-document) - Common Vulnerability Scoring System
+- [FAIR](https://www.fairinstitute.org/) - Factor Analysis of Information Risk
+- [NIST Risk Management Framework (RMF)](https://csrc.nist.gov/projects/risk-management/about-rmf) - NIST Risk Management Framework
 
 **Additional Resources:**
-- CERT Secure Coding Standards
-- SANS Top 25 Most Dangerous Software Errors
-- Cloud Security Alliance (CSA) Cloud Controls Matrix
-- ENISA Threat Landscape Reports
+- [CERT Secure Coding Standards](https://wiki.sei.cmu.edu/confluence/display/seccode) - Carnegie Mellon SEI Secure Coding
+- [SANS Top 25 Most Dangerous Software Errors](https://www.sans.org/top25-software-errors/) - SANS CWE Top 25
+- [Cloud Security Alliance (CSA) Cloud Controls Matrix](https://cloudsecurityalliance.org/research/cloud-controls-matrix/) - CSA CCM
+- [ENISA Threat Landscape Reports](https://www.enisa.europa.eu/topics/threat-risk-management/threats-and-trends) - European Union Agency for Cybersecurity
+
+---
+
+# DISCLAIMER
+
+**AI-Generated Report Notice:**
+
+This threat assessment report was generated using artificial intelligence (AI) technology powered by SecureAI. While the analysis incorporates industry-standard frameworks, best practices, and uploaded documentation, it should be considered as a preliminary assessment tool.
+
+**Important Considerations:**
+- This report is AI-generated and may contain inaccuracies, omissions, or misinterpretations
+- All findings, risk ratings, and recommendations must be validated by qualified security professionals
+- The assessment should be reviewed and supplemented with manual security analysis
+- Implementation of any recommendations should be evaluated in the context of your specific environment
+- This report does not replace professional security audits, penetration testing, or compliance assessments
+
+**Recommended Next Steps:**
+1. Review this report with your security team and subject matter experts
+2. Validate findings against your actual system architecture and controls
+3. Conduct additional manual threat modeling sessions
+4. Perform security testing to confirm identified vulnerabilities
+5. Engage certified security professionals for critical systems
+
+By using this AI-generated report, you acknowledge that it serves as a starting point for threat modeling activities and requires human expertise for validation and implementation.
 
 **CRITICAL FORMATTING REQUIREMENTS:**
 
