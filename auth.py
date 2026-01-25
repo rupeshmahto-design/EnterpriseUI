@@ -5,8 +5,17 @@ Authentication module for SSO (SAML) and session management
 from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
 import secrets
-from onelogin.saml2.auth import OneLogin_Saml2_Auth
-from onelogin.saml2.utils import OneLogin_Saml2_Utils
+
+# Make SAML imports optional (not available on Railway without system dependencies)
+try:
+    from onelogin.saml2.auth import OneLogin_Saml2_Auth
+    from onelogin.saml2.utils import OneLogin_Saml2_Utils
+    SAML_AVAILABLE = True
+except ImportError:
+    SAML_AVAILABLE = False
+    OneLogin_Saml2_Auth = None
+    OneLogin_Saml2_Utils = None
+
 from sqlalchemy.orm import Session
 from models import User, Organization, AuditLog
 import jwt
@@ -17,6 +26,8 @@ class SAMLAuthHandler:
     """Handle SAML SSO authentication"""
     
     def __init__(self, organization: Organization):
+        if not SAML_AVAILABLE:
+            raise RuntimeError("SAML authentication is not available. Install python3-saml to enable.")
         self.organization = organization
         self.settings = self._build_saml_settings()
     
