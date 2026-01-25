@@ -28,8 +28,10 @@ COPY . /app
 
 # Streamlit config
 ENV STREAMLIT_SERVER_PORT=8501 \
-    STREAMLIT_SERVER_HEADLESS=true
+    STREAMLIT_SERVER_HEADLESS=true \
+    STREAMLIT_SERVER_ADDRESS=0.0.0.0
 
 EXPOSE 8501
 
-CMD ["python", "-m", "streamlit", "run", "app.py"]
+# Use shell form to allow environment variable expansion
+CMD streamlit run app.py --server.port=${PORT:-8501} --server.address=0.0.0.0 --server.headless=true
