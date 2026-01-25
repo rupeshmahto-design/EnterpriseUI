@@ -606,17 +606,6 @@ def render_sidebar(user: User):
 
 def render_threat_assessment_form(db: Session, user: User):
     """Render the comprehensive threat assessment form"""
-    # Hero section
-    st.markdown(
-        """
-        <div style='text-align: center; padding: 1rem 0;'>
-            <h1>🔒 AI-Powered Threat Modeling Tool</h1>
-            <p class='header-subtitle'>Enterprise-grade threat assessment powered by SecureAI</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
     # Quick actions
     qa_col1, qa_col2 = st.columns([3, 1])
     with qa_col2:
@@ -961,6 +950,17 @@ def main():
             return
 
         render_sidebar(user)
+        
+        # Hero section at the top
+        st.markdown(
+            """
+            <div style='text-align: center; padding: 1rem 0 2rem 0;'>
+                <h1>🔒 AI-Powered Threat Modeling Tool</h1>
+                <p style='color: #64748b; font-size: 1.1rem;'>Enterprise-grade threat assessment powered by SecureAI</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
         if user.is_org_admin or user.role == "super_admin":
             tab1, tab2, tab3 = st.tabs(["Threat Modeling", "Past Assessments", "Admin Dashboard"])

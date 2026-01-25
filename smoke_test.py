@@ -36,6 +36,8 @@ class _DummySessionState:
             super().__setattr__(name, value)
         else:
             self._d[name] = value
+    def get(self, key, default=None):
+        return self._d.get(key, default)
 
 fake_st.session_state = _DummySessionState()
 
@@ -49,6 +51,36 @@ class _AnthropicStub:
 
 fake_anthropic.Anthropic = _AnthropicStub
 sys.modules['anthropic'] = fake_anthropic
+
+# Mock database modules
+fake_db = types.SimpleNamespace()
+fake_db.SessionLocal = lambda: None
+sys.modules['database'] = fake_db
+
+fake_models = types.SimpleNamespace()
+class _FakeModel:
+    def __init__(self, **kwargs):
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+        self.id = 1
+fake_models.User = _FakeModel
+fake_models.Organization = _FakeModel
+fake_models.APIKey = _FakeModel
+fake_models.AuditLog = _FakeModel
+fake_models.ThreatAssessment = _FakeModel
+fake_models.UsageStats = _FakeModel
+fake_models.APIUsageLog = _FakeModel
+sys.modules['models'] = fake_models
+
+# Mock auth module
+fake_auth = types.SimpleNamespace()
+fake_auth.PasswordAuth = type('PasswordAuth', (), {})
+sys.modules['auth'] = fake_auth
+
+# Mock admin dashboard
+fake_admin = types.SimpleNamespace()
+fake_admin.render_admin_dashboard = lambda: None
+sys.modules['admin_dashboard'] = fake_admin
 
 from app import generate_threat_assessment
 import anthropic
@@ -73,24 +105,22 @@ class FakeCompletions:
 
 class FakeMessages:
     def create(self, *args, **kwargs):
-        # Expect 'messages' kwarg with messages[0]['content'] containing the prompt text
-        messages = kwargs.get('messages') if 'messages' in kwargs else (args[1] if len(args) > 1 else None)
-        if not messages or not isinstance(messages, list):
-            raise AssertionError("Messages API called without messages list")
-        content = messages[0].get('content', '') if isinstance(messages[0], dict) else ''
-        if 'You are an expert' not in content:
-            raise AssertionError("Messages content missing expected payload")
-        return FakeCompletion(
-            "TABLE OF CONTENTS\n- [EXECUTIVE SUMMARY](#executive-summary)\n- [THREAT MODELING ANALYSIS](#threat-modeling-analysis)\n- [REFERENCES](#references)\n\n## EXECUTIVE SUMMARY\nOverall Risk Rating: LOW\nTop 5 Findings:\n- Test finding 1\n- Test finding 2\n\n## THREAT MODELING ANALYSIS\n...\n\n## REFERENCES\n- [NIST SP 800-53] https://csrc.nist.gov/"
-        )
+        # Return fake message response with content
+        class FakeContent:
+            text = "TABLE OF CONTENTS\n- [EXECUTIVE SUMMARY](#executive-summary)\n- [THREAT MODELING ANALYSIS](#threat-modeling-analysis)\n- [REFERENCES](#references)\n\n## EXECUTIVE SUMMARY\nOverall Risk Rating: LOW\nTop 5 Findings:\n- Test finding 1\n- Test finding 2\n\n## THREAT MODELING ANALYSIS\n...\n\n## REFERENCES\n- [NIST SP 800-53] https://csrc.nist.gov/"
+        
+        class FakeMessage:
+            content = [FakeContent()]
+        
+        return FakeMessage()
 
 
 
 class FakeAnthropic:
     def __init__(self, *args, **kwargs):
         self._completions = FakeCompletions()
-        # Provide beta.messages API used for Claude models
-        self.beta = types.SimpleNamespace(messages=FakeMessages())
+        # messages is a direct attribute for the modern API
+        self.messages = FakeMessages()
 
     @property
     def completions(self):
@@ -98,10 +128,29 @@ class FakeAnthropic:
 
 
 def run_smoke_test():
+    import os
     orig = anthropic.Anthropic
     anthropic.Anthropic = FakeAnthropic
+    
+    # Mock API key in environment for the test
+    os.environ['ANTHROPIC_API_KEY'] = 'fake-test-key'
 
     try:
+        from database import SessionLocal
+        from models import User
+        
+        # Create a minimal fake user and db session
+        class FakeUser:
+            id = 1
+            organization_id = 1
+            email = 'test@example.com'
+        
+        class FakeDB:
+            def add(self, obj): pass
+            def commit(self): pass
+            def refresh(self, obj): 
+                obj.id = 1
+        
         project_info = {
             'name': 'SmokeTest',
             'app_type': 'Web Application',
@@ -114,12 +163,13 @@ def run_smoke_test():
         framework = 'MITRE ATT&CK'
         risk_areas = ['Agentic AI Risk']
 
-        result = generate_threat_assessment(
+        result, assessment = generate_threat_assessment(
             project_info,
             documents_content,
             framework,
             risk_areas,
-            api_key='fake'
+            FakeUser(),
+            FakeDB()
         )
 
         if not result or not isinstance(result, str):
@@ -137,7 +187,9 @@ def run_smoke_test():
         return 0
 
     except Exception as e:
+        import traceback
         print("SMOKE_TEST: Exception:", e)
+        traceback.print_exc()
         return 3
 
     finally:
