@@ -181,55 +181,163 @@ def extract_text_from_file(uploaded_file):
 
 
 def create_pdf_download(report_content, project_name):
-    """Create a PDF download with fallback to markdown"""
+    """Create a PDF download using ReportLab (pure Python, no system deps)"""
+    from reportlab.lib.pagesizes import letter, A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import inch
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, Table, TableStyle
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
+    import re
+    
     base = f"Threat_Assessment_{project_name.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}"
     pdf_filename = f"{base}.pdf"
-    md_filename = f"{base}.md"
-
-    # Try to generate PDF with python-markdown and weasyprint
-    try:
-        import markdown as _markdown
-        from weasyprint import HTML
-
-        md = _markdown.Markdown(extensions=["tables", "fenced_code", "toc"])
-        html_body = md.convert(report_content or "")
+    
+    # Create PDF buffer
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.75*inch, bottomMargin=0.75*inch)
+    
+    # Styles
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=20,
+        textColor=colors.HexColor('#1a202c'),
+        spaceAfter=12,
+        alignment=TA_CENTER
+    )
+    heading1_style = ParagraphStyle(
+        'CustomHeading1',
+        parent=styles['Heading1'],
+        fontSize=16,
+        textColor=colors.HexColor('#2d3748'),
+        spaceBefore=12,
+        spaceAfter=6,
+        borderWidth=2,
+        borderColor=colors.HexColor('#cbd5e0'),
+        borderPadding=4
+    )
+    heading2_style = ParagraphStyle(
+        'CustomHeading2',
+        parent=styles['Heading2'],
+        fontSize=13,
+        textColor=colors.HexColor('#2c5282'),
+        spaceBefore=10,
+        spaceAfter=4
+    )
+    body_style = ParagraphStyle(
+        'CustomBody',
+        parent=styles['BodyText'],
+        fontSize=10,
+        alignment=TA_JUSTIFY,
+        spaceAfter=6
+    )
+    
+    # Build content
+    story = []
+    
+    # Title page
+    story.append(Paragraph("Threat Assessment Report", title_style))
+    story.append(Spacer(1, 0.2*inch))
+    story.append(Paragraph(f"<b>Project:</b> {project_name}", body_style))
+    story.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%B %d, %Y')}", body_style))
+    story.append(Spacer(1, 0.5*inch))
+    
+    # Parse markdown content and convert to PDF elements
+    lines = report_content.split('\n')
+    current_table_data = []
+    in_table = False
+    
+    for line in lines:
+        line = line.strip()
         
-        full_html = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <title>Threat Assessment - {project_name}</title>
-            <style>
-                @page {{ size: A4; margin: 2cm; }}
-                body {{ font-family: Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #1a202c; }}
-                h1 {{ color: #1a202c; font-size: 22pt; border-bottom: 3px solid #2d3748; padding-bottom: 0.5rem; }}
-                h2 {{ color: #2d3748; font-size: 16pt; border-bottom: 2px solid #cbd5e0; padding-bottom: 0.3rem; margin-top: 2rem; }}
-                h3 {{ color: #2c5282; font-size: 13pt; margin-top: 1.5rem; }}
-                table {{ width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 9pt; }}
-                th {{ background: #2d3748; color: white; padding: 0.5rem; text-align: left; font-weight: 700; }}
-                td {{ padding: 0.4rem 0.5rem; border: 1px solid #cbd5e0; }}
-                tbody tr:nth-child(odd) {{ background: #f7fafc; }}
-                strong {{ color: #1a202c; }}
-                code {{ background: #f1f5f9; color: #d97706; padding: 2px 6px; border-radius: 3px; font-size: 9pt; }}
-                pre {{ background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 5px; overflow-x: auto; font-size: 8.5pt; }}
-            </style>
-        </head>
-        <body>
-            <h1>Threat Assessment Report</h1>
-            <p><strong>Project:</strong> {project_name}</p>
-            <p><strong>Date:</strong> {datetime.now().strftime('%B %d, %Y')}</p>
-            <hr>
-            {html_body}
-        </body>
-        </html>
-        """
+        # Skip empty lines in tables
+        if not line and not in_table:
+            story.append(Spacer(1, 0.1*inch))
+            continue
         
-        pdf_bytes = HTML(string=full_html).write_pdf()
-        return pdf_filename, pdf_bytes, "application/pdf"
-    except Exception as e:
-        # Fallback to markdown if PDF generation fails
-        return md_filename, report_content, "text/markdown"
+        # Headers
+        if line.startswith('# '):
+            if current_table_data:
+                story.append(create_table(current_table_data))
+                current_table_data = []
+                in_table = False
+            story.append(Spacer(1, 0.2*inch))
+            story.append(Paragraph(line[2:], title_style))
+        elif line.startswith('## '):
+            if current_table_data:
+                story.append(create_table(current_table_data))
+                current_table_data = []
+                in_table = False
+            story.append(Paragraph(line[3:], heading1_style))
+        elif line.startswith('### '):
+            if current_table_data:
+                story.append(create_table(current_table_data))
+                current_table_data = []
+                in_table = False
+            story.append(Paragraph(line[4:], heading2_style))
+        
+        # Table detection
+        elif '|' in line and line.startswith('|'):
+            in_table = True
+            # Parse table row
+            cells = [cell.strip() for cell in line.split('|')[1:-1]]
+            current_table_data.append(cells)
+        elif line.startswith('---') or line.startswith('==='):
+            continue  # Skip separator lines
+        
+        # Regular text
+        elif line and not in_table:
+            if current_table_data:
+                story.append(create_table(current_table_data))
+                current_table_data = []
+                in_table = False
+            
+            # Bold text
+            line = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', line)
+            # Code
+            line = re.sub(r'`(.+?)`', r'<font face="Courier">\1</font>', line)
+            
+            story.append(Paragraph(line, body_style))
+    
+    # Add any remaining table
+    if current_table_data:
+        story.append(create_table(current_table_data))
+    
+    # Build PDF
+    doc.build(story)
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+    
+    return pdf_filename, pdf_bytes, "application/pdf"
+
+
+def create_table(table_data):
+    """Helper to create formatted table for ReportLab"""
+    from reportlab.platypus import Table, TableStyle
+    from reportlab.lib import colors
+    
+    if not table_data:
+        return None
+    
+    # Style the table
+    style = TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2d3748')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 9),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f7fafc')),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e0')),
+        ('FONTSIZE', (0, 1), (-1, -1), 8),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f7fafc')])
+    ])
+    
+    table = Table(table_data, repeatRows=1)
+    table.setStyle(style)
+    return table
 
 
 def generate_threat_assessment(project_info, documents_content, framework, risk_areas, user: User, db: Session):
