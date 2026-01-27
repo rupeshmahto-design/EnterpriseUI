@@ -66,6 +66,12 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Initialize sidebar pin state
+if "sidebar_pinned" not in st.session_state:
+    st.session_state.sidebar_pinned = True
+if "sidebar_hovered" not in st.session_state:
+    st.session_state.sidebar_hovered = False
+
 # Custom CSS for enterprise-grade professional UI
 st.markdown("""
     <style>
@@ -537,26 +543,26 @@ st.markdown("""
     
     /* Account Badge - Enterprise */
     .account-badge {
-        background: linear-gradient(135deg, #f0fdf4 0%, #dbeafe 100%);
+        background: linear-gradient(135deg, #ecf8fb 0%, #cffafe 100%);
         padding: 1.25rem;
         border-radius: 12px;
-        border: 2px solid var(--accent-tertiary);
+        border: 2px solid #06b6d4;
         margin: 1rem 0;
-        color: var(--primary-dark);
+        color: #0d4a5e;
         font-weight: 600;
-        box-shadow: 0 2px 8px rgba(20, 184, 166, 0.1);
+        box-shadow: 0 2px 8px rgba(6, 182, 212, 0.15);
     }
     
     /* Admin Badge */
     .admin-badge {
-        background: linear-gradient(135deg, #fef3c7 0%, #fcd34d 100%);
+        background: linear-gradient(135deg, #fef08a 0%, #fcd34d 100%);
         padding: 0.875rem 1.25rem;
         border-radius: 10px;
-        border: 2px solid #fbbf24;
+        border: 2px solid #ca8a04;
         font-weight: 700;
-        color: #78350f;
+        color: #5a2e0f;
         margin: 0.75rem 0;
-        box-shadow: 0 3px 10px rgba(217, 119, 6, 0.15);
+        box-shadow: 0 3px 10px rgba(202, 138, 4, 0.2);
         text-transform: uppercase;
         font-size: 0.85rem;
         letter-spacing: 0.05em;
@@ -566,30 +572,57 @@ st.markdown("""
     .risk-badge-critical {
         background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
         color: #7f1d1d;
-        border: 2px solid #fca5a5;
+        border: 2px solid #dc2626;
+        font-weight: 700;
     }
     
     .risk-badge-high {
         background: linear-gradient(135deg, #fed7aa 0%, #fdba74 100%);
-        color: #7c2d12;
-        border: 2px solid #fb923c;
+        color: #6b2410;
+        border: 2px solid #ea580c;
+        font-weight: 700;
     }
     
     .risk-badge-medium {
-        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-        color: #78350f;
-        border: 2px solid #fcd34d;
+        background: linear-gradient(135deg, #fef08a 0%, #fcd34d 100%);
+        color: #5a2e0f;
+        border: 2px solid #ca8a04;
+        font-weight: 700;
     }
     
     .risk-badge-low {
-        background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
-        color: #065f46;
-        border: 2px solid #6ee7b7;
+        background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+        color: #115e3b;
+        border: 2px solid #16a34a;
+        font-weight: 700;
     }
     
     /* Loading Spinner */
     .stSpinner > div {
         border-top-color: var(--accent-primary) !important;
+    }
+    
+    /* Sidebar Auto-Hide and Pin Styling */
+    .sidebar-pin-button {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        z-index: 999;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        padding: 0.75rem 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(13, 27, 42, 0.2);
+        transition: all 0.3s ease;
+        font-size: 0.9rem;
+    }
+    
+    .sidebar-pin-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(13, 27, 42, 0.3);
     }
     
     /* Professional Scrollbar */
@@ -1300,7 +1333,16 @@ def render_login(db: Session):
 
 
 def render_sidebar(user: User):
+    # Sidebar Pin Toggle Button (always visible)
     with st.sidebar:
+        col1, col2, col3 = st.columns([1, 4, 1])
+        with col3:
+            if st.button("📌" if st.session_state.sidebar_pinned else "📍", key="pin_toggle", help="Pin/Unpin sidebar"):
+                st.session_state.sidebar_pinned = not st.session_state.sidebar_pinned
+                st.rerun()
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
         # Enterprise Logo/Brand Section
         st.markdown("""
             <div style="
@@ -1437,6 +1479,28 @@ def render_sidebar(user: User):
             st.session_state.user_id = None
             st.session_state.user = None
             st.rerun()
+        
+        # Sidebar Auto-Hide JavaScript (only if not pinned)
+        if not st.session_state.sidebar_pinned:
+            st.markdown("""
+                <script>
+                setTimeout(function() {
+                    const sidebar = document.querySelector('[data-testid="stSidebar"]');
+                    const sidebarToggle = document.querySelector('[data-testid="collapseSidebarButton"]');
+                    
+                    if (sidebar) {
+                        // Hide sidebar on mouse leave
+                        sidebar.addEventListener('mouseleave', function() {
+                            if (sidebarToggle) {
+                                sidebarToggle.click();
+                            }
+                        });
+                        
+                        // Show on mouse enter (will re-render so not needed here)
+                    }
+                }, 500);
+                </script>
+            """, unsafe_allow_html=True)
 
 
 def render_threat_assessment_form(db: Session, user: User):
