@@ -113,6 +113,32 @@ st.markdown("""
         padding: 2rem 1rem;
     }
     
+    /* Sidebar Optimization */
+    [data-testid="stSidebar"] {
+        padding: 1rem 0.75rem !important;
+    }
+    
+    [data-testid="stSidebar"] h3 {
+        margin-top: 0 !important;
+        margin-bottom: 0.5rem !important;
+        font-size: 1.1rem !important;
+    }
+    
+    [data-testid="stSidebar"] p {
+        margin: 0 !important;
+    }
+    
+    [data-testid="stSidebar"] hr {
+        margin: 1rem 0 !important;
+        padding: 0 !important;
+    }
+    
+    [data-testid="stSidebar"] .stButton>button {
+        font-size: 0.875rem !important;
+        padding: 0.5rem 1rem !important;
+        height: auto !important;
+    }
+    
     /* Typography - Enterprise Hierarchy */
     h1 {
         color: var(--primary-dark) !important;
@@ -563,10 +589,10 @@ st.markdown("""
     /* Account Badge - Enterprise */
     .account-badge {
         background: linear-gradient(135deg, #ecf8fb 0%, #cffafe 100%);
-        padding: 1.25rem;
-        border-radius: 12px;
+        padding: 1rem;
+        border-radius: 10px;
         border: 2px solid #06b6d4;
-        margin: 1rem 0;
+        margin: 0 0 0.75rem 0;
         color: #0d4a5e;
         font-weight: 600;
         box-shadow: 0 2px 8px rgba(6, 182, 212, 0.15);
@@ -575,16 +601,17 @@ st.markdown("""
     /* Admin Badge */
     .admin-badge {
         background: linear-gradient(135deg, #fef08a 0%, #fcd34d 100%);
-        padding: 0.875rem 1.25rem;
+        padding: 0.625rem 1rem;
         border-radius: 10px;
         border: 2px solid #ca8a04;
         font-weight: 700;
         color: #5a2e0f;
-        margin: 0.75rem 0;
+        margin: 0 0 0.75rem 0;
         box-shadow: 0 3px 10px rgba(202, 138, 4, 0.2);
         text-transform: uppercase;
-        font-size: 0.85rem;
+        font-size: 0.75rem;
         letter-spacing: 0.05em;
+        display: block;
     }
     
     /* Risk Level Badges */
@@ -1354,98 +1381,94 @@ def render_login(db: Session):
 def render_sidebar(user: User):
     # Sidebar Pin Toggle Button (always visible)
     with st.sidebar:
-        col1, col2, col3 = st.columns([2, 3, 1])
-        with col3:
+        # Compact Header with Pin Button
+        col1, col2 = st.columns([4, 1])
+        with col2:
             if st.button("📌" if st.session_state.sidebar_pinned else "📍", key="pin_toggle", help="Pin/Unpin sidebar", use_container_width=True):
                 st.session_state.sidebar_pinned = not st.session_state.sidebar_pinned
         
-        st.markdown("<br>", unsafe_allow_html=True)
-        
-        # Enterprise Logo/Brand Section - Professional Design
+        # Enterprise Logo/Brand Section - Optimized Spacing
         st.markdown("""
             <div style="
                 background: linear-gradient(135deg, #0d1b2a 0%, #1a2f4a 100%);
-                padding: 2rem 1.5rem;
-                border-radius: 16px;
-                margin-bottom: 2.5rem;
+                padding: 1.5rem 1.25rem;
+                border-radius: 14px;
+                margin: 0.75rem 0 1.5rem 0;
                 text-align: center;
                 color: white;
-                box-shadow: 0 6px 20px rgba(13, 27, 42, 0.3);
-                border: 1px solid rgba(8, 145, 178, 0.2);
+                box-shadow: 0 4px 16px rgba(13, 27, 42, 0.25);
+                border: 1px solid rgba(8, 145, 178, 0.25);
                 position: relative;
                 overflow: hidden;
             ">
                 <div style="position: relative; z-index: 2;">
-                    <h2 style="color: white !important; margin: 0 0 0.75rem 0; font-size: 1.75rem; font-weight: 800; letter-spacing: -0.01em;">🛡️ SecureAI</h2>
-                    <div style="height: 3px; background: linear-gradient(90deg, #0891b2, #06b6d4); margin: 0.75rem 0; border-radius: 10px;"></div>
-                    <p style="color: rgba(255,255,255,0.95); margin: 0.75rem 0 0 0; font-size: 0.9rem; font-weight: 600; letter-spacing: 0.02em;">Threat Assessment Platform</p>
+                    <h3 style="color: white !important; margin: 0 0 0.5rem 0; font-size: 1.4rem; font-weight: 800; letter-spacing: -0.01em;">🛡️ SecureAI</h3>
+                    <div style="height: 2px; background: linear-gradient(90deg, #0891b2, #06b6d4); margin: 0.5rem 0; border-radius: 10px;"></div>
+                    <p style="color: rgba(255,255,255,0.9); margin: 0.5rem 0 0 0; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.02em;">Assessment Platform</p>
                 </div>
             </div>
         """, unsafe_allow_html=True)
         
-        # Professional Account Section
-        st.markdown("### 👤 Account Information")
+        # Account Section - Compact
+        st.markdown("""
+            <div style="margin-bottom: 1.25rem;">
+                <p style="font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; margin: 0 0 0.5rem 0;">Account</p>
+            </div>
+        """, unsafe_allow_html=True)
+        
         st.markdown(f"""
-            <div class="account-badge">
-                <div style="font-size: 0.85rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; margin-bottom: 0.5rem;">Email</div>
-                <div style="font-size: 1.1rem; font-weight: 700; color: var(--primary-dark);">{user.email}</div>
+            <div class="account-badge" style="margin: 0 0 0.75rem 0; padding: 1rem;">
+                <div style="font-size: 0.75rem; color: #0d4a5e; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; margin-bottom: 0.375rem;">Email</div>
+                <div style="font-size: 0.95rem; font-weight: 700; color: #0d4a5e; word-break: break-all;">{user.email}</div>
             </div>
         """, unsafe_allow_html=True)
         
         if user.is_org_admin or user.role == "super_admin":
-            st.markdown('<div class="admin-badge">🔑 Administrator Access</div>', unsafe_allow_html=True)
+            st.markdown('<div class="admin-badge" style="margin: 0; padding: 0.625rem 1rem; font-size: 0.75rem;">🔑 Administrator</div>', unsafe_allow_html=True)
         
         st.markdown("---")
         
-        # API Configuration Section with Enhanced Styling
-        st.markdown("### 🔐 SecureAI API Configuration")
-        st.markdown('<div class="config-section">', unsafe_allow_html=True)
+        # API Configuration - Compact
+        st.markdown("""
+            <p style="font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; margin: 0 0 0.75rem 0;">API Configuration</p>
+        """, unsafe_allow_html=True)
         
         # Get current API key from environment
         current_key = os.getenv("ANTHROPIC_API_KEY", "")
         is_placeholder = current_key.startswith("sk-ant-api03-CHANGE")
         
         if is_placeholder or not current_key:
-            st.warning("⚠️ API key not configured. Assessment generation unavailable.")
+            st.warning("API key not configured", icon="⚠️")
         else:
-            st.success("✅ API key configured and active")
+            st.success("API key active", icon="✅")
         
-        st.markdown('<p class="label-text">API Key</p>', unsafe_allow_html=True)
-        
-        # API Key input
+        # API Key input - Compact
         if 'api_key_input' not in st.session_state:
             st.session_state.api_key_input = current_key if not is_placeholder else ""
         
         api_key = st.text_input(
-            "SecureAI API Key",
+            "API Key",
             type="password",
             value=st.session_state.api_key_input,
             placeholder="sk-ant-api03-...",
-            help="Your SecureAI API key for threat assessment generation",
             label_visibility="collapsed"
         )
         
         if api_key and api_key != st.session_state.api_key_input:
             st.session_state.api_key_input = api_key
-            # Update environment variable for current session
             os.environ["ANTHROPIC_API_KEY"] = api_key
-            st.success("✅ API key updated for this session")
+            st.success("Key updated", icon="✅")
 
-        # Optional persistence to .env
-        st.markdown('<p style="font-size: 0.85rem; color: #64748b; margin: 1.5rem 0 0.75rem 0; font-weight: 600;">Storage Options</p>', unsafe_allow_html=True)
-        save_toggle = st.checkbox(
-            "Save API key securely on this device",
-            value=False,
-            help="Stores ANTHROPIC_API_KEY in your local .env file"
-        )
+        # Storage Options - Compact
+        save_toggle = st.checkbox("Save key", value=False, help="Store in .env file")
         
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("💾 Save", use_container_width=True):
+            if st.button("Save", use_container_width=True, key="save_key_btn"):
                 if not api_key:
-                    st.error("Please enter a key first")
+                    st.error("Enter key first", icon="❌")
                 elif not save_toggle:
-                    st.warning("Enable storage option first")
+                    st.warning("Enable save first", icon="⚠️")
                 else:
                     try:
                         from pathlib import Path
@@ -1466,18 +1489,18 @@ def render_sidebar(user: User):
                             new_lines.append(f"ANTHROPIC_API_KEY={api_key}")
                         env_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
                         os.environ["ANTHROPIC_API_KEY"] = api_key
-                        st.success("✅ Saved to .env")
+                        st.success("Saved", icon="✅")
                     except Exception as e:
-                        st.error(f"Failed: {e}")
+                        st.error(f"Error: {str(e)[:30]}")
         
         with col2:
-            if st.button("🔄 Clear", use_container_width=True):
+            if st.button("Clear", use_container_width=True, key="clear_key_btn"):
                 st.session_state.api_key_input = ""
                 os.environ.pop("ANTHROPIC_API_KEY", None)
-                st.info("API key cleared")
+                st.info("Cleared", icon="🔄")
         
-        st.markdown('</div>', unsafe_allow_html=True)
         st.markdown("---")
+        
         
         # Help & Support Section
         st.markdown("### 📚 Help & Support")
