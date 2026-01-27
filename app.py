@@ -66,18 +66,432 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for beautiful UI
+# Custom CSS for professional SaaS UI
 st.markdown("""
     <style>
-    * { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif; }
-    .main { background: #f8fafc; }
-    h1 { color: #0f172a !important; font-weight: 700 !important; }
-    h2 { color: #1e293b !important; font-weight: 700 !important; border-bottom: 3px solid #3b82f6 !important; padding-bottom: 0.5rem !important; }
-    .stButton>button { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important; color: white !important; border-radius: 8px !important; font-weight: 600 !important; border: none !important; }
-    .stButton>button:hover { background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important; }
-    .framework-card { background: white !important; border: 2px solid #e2e8f0 !important; padding: 1.5rem !important; border-radius: 12px !important; margin: 1rem 0 !important; }
-    .framework-card.selected { background: #eff6ff !important; border-color: #3b82f6 !important; }
-    .upload-box { border: 3px dashed #3b82f6 !important; border-radius: 12px !important; padding: 2.5rem 2rem !important; text-align: center !important; background: linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%) !important; margin: 1rem 0 !important; }
+    /* Global Styles - Professional SaaS Design */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+    
+    * {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+        letter-spacing: -0.01em;
+    }
+    
+    /* Main Layout */
+    .main {
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        padding: 2rem 3rem;
+    }
+    
+    .block-container {
+        max-width: 1400px;
+        padding: 2rem 1rem;
+    }
+    
+    /* Typography - Modern SaaS Style */
+    h1 {
+        color: #0f172a !important;
+        font-weight: 800 !important;
+        font-size: 2.5rem !important;
+        margin-bottom: 0.5rem !important;
+        background: linear-gradient(135deg, #0f172a 0%, #334155 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    
+    h2 {
+        color: #1e293b !important;
+        font-weight: 700 !important;
+        font-size: 1.75rem !important;
+        margin-top: 2rem !important;
+        margin-bottom: 1.5rem !important;
+        padding-bottom: 0.75rem !important;
+        border-bottom: 2px solid #e2e8f0 !important;
+    }
+    
+    h3 {
+        color: #334155 !important;
+        font-weight: 600 !important;
+        font-size: 1.25rem !important;
+        margin-top: 1.5rem !important;
+    }
+    
+    p {
+        color: #475569;
+        line-height: 1.6;
+    }
+    
+    /* Professional Sidebar */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+        border-right: 1px solid #e2e8f0;
+        box-shadow: 2px 0 12px rgba(0, 0, 0, 0.03);
+    }
+    
+    [data-testid="stSidebar"] .element-container {
+        padding: 0.5rem 1rem;
+    }
+    
+    /* Modern Buttons - SaaS Style */
+    .stButton>button {
+        background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
+        color: white !important;
+        border-radius: 10px !important;
+        font-weight: 600 !important;
+        border: none !important;
+        padding: 0.75rem 1.5rem !important;
+        font-size: 0.95rem !important;
+        letter-spacing: -0.01em !important;
+        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25) !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+    
+    .stButton>button:hover {
+        background: linear-gradient(135deg, #4338ca 0%, #4f46e5 100%) !important;
+        box-shadow: 0 6px 20px rgba(79, 70, 229, 0.35) !important;
+        transform: translateY(-2px) !important;
+    }
+    
+    .stButton>button:active {
+        transform: translateY(0) !important;
+    }
+    
+    /* Secondary Buttons */
+    .stButton>button[kind="secondary"] {
+        background: white !important;
+        color: #4f46e5 !important;
+        border: 2px solid #e2e8f0 !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05) !important;
+    }
+    
+    /* Professional Input Fields */
+    .stTextInput>div>div>input,
+    .stSelectbox>div>div>select,
+    .stMultiSelect>div>div>div,
+    .stTextArea>div>div>textarea {
+        border: 2px solid #e2e8f0 !important;
+        border-radius: 10px !important;
+        padding: 0.75rem 1rem !important;
+        font-size: 0.95rem !important;
+        background: white !important;
+        transition: all 0.2s ease !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+    }
+    
+    .stTextInput>div>div>input:focus,
+    .stSelectbox>div>div>select:focus,
+    .stTextArea>div>div>textarea:focus {
+        border-color: #4f46e5 !important;
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1) !important;
+        outline: none !important;
+    }
+    
+    /* Professional Cards */
+    .framework-card {
+        background: white !important;
+        border: 2px solid #e2e8f0 !important;
+        padding: 1.75rem !important;
+        border-radius: 16px !important;
+        margin: 1rem 0 !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+    }
+    
+    .framework-card:hover {
+        border-color: #cbd5e1 !important;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08) !important;
+        transform: translateY(-2px) !important;
+    }
+    
+    .framework-card.selected {
+        background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%) !important;
+        border-color: #4f46e5 !important;
+        box-shadow: 0 8px 24px rgba(79, 70, 229, 0.15) !important;
+    }
+    
+    /* Risk Cards */
+    .risk-card {
+        background: white !important;
+        border: 2px solid #e2e8f0 !important;
+        padding: 1.5rem !important;
+        border-radius: 14px !important;
+        margin: 0.75rem 0 !important;
+        transition: all 0.25s ease !important;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03) !important;
+    }
+    
+    .risk-card:hover {
+        border-color: #4f46e5 !important;
+        box-shadow: 0 6px 16px rgba(79, 70, 229, 0.1) !important;
+    }
+    
+    /* File Upload - Professional Design */
+    .upload-box {
+        border: 3px dashed #cbd5e1 !important;
+        border-radius: 16px !important;
+        padding: 3rem 2rem !important;
+        text-align: center !important;
+        background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%) !important;
+        margin: 1.5rem 0 !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .upload-box:hover {
+        border-color: #4f46e5 !important;
+        background: linear-gradient(135deg, #eef2ff 0%, #f5f3ff 100%) !important;
+    }
+    
+    [data-testid="stFileUploader"] {
+        background: white;
+        border: 2px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 1.5rem;
+    }
+    
+    /* Hero Banner - Premium Look */
+    .hero-banner {
+        background: linear-gradient(135deg, #4f46e5 0%, #6366f1 50%, #8b5cf6 100%);
+        padding: 3.5rem 3rem;
+        border-radius: 20px;
+        margin-bottom: 2.5rem;
+        box-shadow: 0 20px 50px rgba(79, 70, 229, 0.25);
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .hero-banner::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+        opacity: 0.3;
+    }
+    
+    .hero-banner h1 {
+        color: white !important;
+        font-size: 3rem !important;
+        font-weight: 800 !important;
+        margin-bottom: 0.75rem !important;
+        text-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        background: none !important;
+        -webkit-text-fill-color: white !important;
+    }
+    
+    .hero-banner p {
+        color: rgba(255, 255, 255, 0.95) !important;
+        font-size: 1.25rem !important;
+        font-weight: 500 !important;
+        margin: 0 !important;
+    }
+    
+    /* Tabs - Modern Design */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 1rem;
+        background: white;
+        padding: 1rem;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        border: 1px solid #e2e8f0;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        height: 3.5rem;
+        padding: 0 2rem;
+        background: transparent;
+        border-radius: 8px;
+        color: #64748b;
+        font-weight: 600;
+        font-size: 1rem;
+        border: none;
+        transition: all 0.2s ease;
+    }
+    
+    .stTabs [data-baseweb="tab"]:hover {
+        background: #f8fafc;
+        color: #4f46e5;
+    }
+    
+    .stTabs [data-baseweb="tab"][aria-selected="true"] {
+        background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+        color: white;
+        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+    }
+    
+    /* Tables - Professional Style */
+    .dataframe {
+        border: none !important;
+        border-radius: 12px !important;
+        overflow: hidden !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05) !important;
+    }
+    
+    .dataframe th {
+        background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
+        color: white !important;
+        font-weight: 600 !important;
+        padding: 1rem !important;
+        text-align: left !important;
+        border: none !important;
+    }
+    
+    .dataframe td {
+        padding: 0.875rem 1rem !important;
+        border-bottom: 1px solid #f1f5f9 !important;
+    }
+    
+    .dataframe tr:hover {
+        background: #f8fafc !important;
+    }
+    
+    /* Metrics - Dashboard Style */
+    [data-testid="stMetricValue"] {
+        font-size: 2.25rem !important;
+        font-weight: 700 !important;
+        color: #0f172a !important;
+    }
+    
+    [data-testid="stMetricLabel"] {
+        font-size: 0.9rem !important;
+        font-weight: 600 !important;
+        color: #64748b !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.05em !important;
+    }
+    
+    /* Status Badges */
+    .status-badge {
+        display: inline-block;
+        padding: 0.375rem 0.875rem;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.025em;
+    }
+    
+    .status-critical {
+        background: #fee2e2;
+        color: #991b1b;
+        border: 1px solid #fecaca;
+    }
+    
+    .status-high {
+        background: #fed7aa;
+        color: #9a3412;
+        border: 1px solid #fdba74;
+    }
+    
+    .status-medium {
+        background: #fef3c7;
+        color: #92400e;
+        border: 1px solid #fde68a;
+    }
+    
+    .status-low {
+        background: #d1fae5;
+        color: #065f46;
+        border: 1px solid #a7f3d0;
+    }
+    
+    /* Expanders - Clean Design */
+    .streamlit-expanderHeader {
+        background: white !important;
+        border: 2px solid #e2e8f0 !important;
+        border-radius: 12px !important;
+        padding: 1rem 1.5rem !important;
+        font-weight: 600 !important;
+        color: #1e293b !important;
+        transition: all 0.2s ease !important;
+    }
+    
+    .streamlit-expanderHeader:hover {
+        background: #f8fafc !important;
+        border-color: #cbd5e1 !important;
+    }
+    
+    /* Checkboxes - Modern Style */
+    .stCheckbox {
+        padding: 0.5rem 0;
+    }
+    
+    .stCheckbox > label {
+        font-weight: 500 !important;
+        color: #334155 !important;
+    }
+    
+    /* Success/Info/Warning Messages */
+    .stSuccess, .stInfo, .stWarning, .stError {
+        border-radius: 12px !important;
+        border-left-width: 4px !important;
+        padding: 1rem 1.5rem !important;
+        font-weight: 500 !important;
+    }
+    
+    /* Loading Spinner */
+    .stSpinner > div {
+        border-top-color: #4f46e5 !important;
+    }
+    
+    /* Dividers */
+    hr {
+        margin: 2rem 0 !important;
+        border: none !important;
+        border-top: 2px solid #e2e8f0 !important;
+    }
+    
+    /* Configuration Section */
+    .config-section {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 12px;
+        border: 1px solid #e2e8f0;
+        margin: 1rem 0;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+    
+    /* Account Info Badge */
+    .account-badge {
+        background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+        padding: 1rem;
+        border-radius: 10px;
+        border: 1px solid #bbf7d0;
+        margin: 0.5rem 0;
+    }
+    
+    /* Admin Badge */
+    .admin-badge {
+        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+        padding: 0.75rem 1rem;
+        border-radius: 8px;
+        border: 1px solid #fcd34d;
+        font-weight: 600;
+        color: #92400e;
+        margin: 0.5rem 0;
+    }
+    
+    /* Scrollbar Styling */
+    ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+    
+    ::-webkit-scrollbar-track {
+        background: #f1f5f9;
+        border-radius: 10px;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 10px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -757,15 +1171,19 @@ def render_login(db: Session):
 
 def render_sidebar(user: User):
     with st.sidebar:
-        st.markdown("## Account")
-        st.success(f"{user.email}")
+        # Professional Account Section
+        st.markdown('<div style="margin-bottom: 1.5rem;">', unsafe_allow_html=True)
+        st.markdown("### 👤 Account")
+        st.markdown(f'<div class="account-badge">✉️ <b>{user.email}</b></div>', unsafe_allow_html=True)
         if user.is_org_admin or user.role == "super_admin":
-            st.info("Administrator access")
+            st.markdown('<div class="admin-badge">🔑 Administrator Access</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown("---")
         
-        # API Key Configuration
-        st.markdown("## ⚙️ Configuration")
+        # Professional API Configuration Section
+        st.markdown("### ⚙️ Configuration")
+        st.markdown('<div class="config-section">', unsafe_allow_html=True)
         
         # Get current API key from environment
         current_key = os.getenv("ANTHROPIC_API_KEY", "")
@@ -776,6 +1194,8 @@ def render_sidebar(user: User):
         else:
             st.success("✓ API Key configured")
         
+        st.markdown('<p style="color: #64748b; font-size: 0.875rem; margin: 0.5rem 0;">SecureAI API Key</p>', unsafe_allow_html=True)
+        
         # API Key input
         if 'api_key_input' not in st.session_state:
             st.session_state.api_key_input = current_key if not is_placeholder else ""
@@ -785,27 +1205,27 @@ def render_sidebar(user: User):
             type="password",
             value=st.session_state.api_key_input,
             placeholder="sk-ant-api03-...",
-            help="Enter your SecureAI API key to enable threat assessments"
+            help="Enter your SecureAI API key to enable threat assessments",
+            label_visibility="collapsed"
         )
         
         if api_key and api_key != st.session_state.api_key_input:
             st.session_state.api_key_input = api_key
             # Update environment variable for current session
             os.environ["ANTHROPIC_API_KEY"] = api_key
-            st.success("✓ API Key updated for this session")
-            st.caption("Note: Restart app to persist changes to .env file")
+            st.success("✓ API Key updated")
 
         # Optional persistence to .env when explicitly requested
         save_toggle = st.checkbox(
-            "Save key to .env for this device",
+            "💾 Save to .env for this device",
             value=False,
             help="Writes ANTHROPIC_API_KEY to the project's .env file"
         )
-        if st.button("💾 Save Key", use_container_width=True):
+        if st.button("Save Key", use_container_width=True, type="secondary"):
             if not api_key:
                 st.error("Please enter a key first")
             elif not save_toggle:
-                st.warning("Enable 'Save key to .env' to confirm persistence")
+                st.warning("Enable save option first")
             else:
                 try:
                     from pathlib import Path
@@ -827,11 +1247,14 @@ def render_sidebar(user: User):
                     env_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
                     # Update current process env as well
                     os.environ["ANTHROPIC_API_KEY"] = api_key
-                    st.success("Key saved to .env")
+                    st.success("✓ Saved to .env")
                 except Exception as e:
-                    st.error(f"Failed to save key: {e}")
+                    st.error(f"Failed: {e}")
         
-        if st.button("Sign Out", use_container_width=True):
+        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("---")
+        
+        if st.button("🚪 Sign Out", use_container_width=True, type="secondary"):
             # Clear SecureAI key on logout
             st.session_state.api_key_input = ""
             try:
@@ -1061,8 +1484,7 @@ def render_threat_assessment_form(db: Session, user: User):
 def render_past_assessments(db: Session, user: User):
     """Render past assessments with filters and enhanced presentation"""
     st.markdown("# 📚 Past Assessments")
-    st.markdown("View and manage all your threat assessment reports")
-    st.markdown("---")
+    st.markdown('<p style="color: #64748b; font-size: 1.05rem; margin-bottom: 2rem;">View and manage all your threat assessment reports</p>', unsafe_allow_html=True)
     
     # Get all assessments for this user
     all_assessments = (
@@ -1075,6 +1497,22 @@ def render_past_assessments(db: Session, user: User):
     if not all_assessments:
         st.info("🔍 No past assessments yet. Create your first threat assessment in the 'Threat Modeling' tab!")
         return
+    
+    # Summary metrics at the top
+    metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
+    with metric_col1:
+        st.metric("📊 Total Assessments", len(all_assessments))
+    with metric_col2:
+        completed = len([a for a in all_assessments if a.status == "completed"])
+        st.metric("✅ Completed", completed)
+    with metric_col3:
+        recent = len([a for a in all_assessments if (datetime.utcnow() - a.created_at).days <= 7])
+        st.metric("🕐 Last 7 Days", recent)
+    with metric_col4:
+        frameworks_used = len(set([a.framework for a in all_assessments if a.framework]))
+        st.metric("🎯 Frameworks Used", frameworks_used)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
     
     # Filters - Initialize session state to prevent state conflicts
     if "framework_filter" not in st.session_state:
@@ -1093,17 +1531,17 @@ def render_past_assessments(db: Session, user: User):
         # Get unique frameworks
         frameworks = sorted(list(set([a.framework for a in all_assessments if a.framework])))
         framework_options = ["All"] + frameworks
-        framework_filter = st.selectbox("Filter by Framework", framework_options, index=0, key="framework_filter")
+        framework_filter = st.selectbox("Framework", framework_options, index=0, key="framework_filter")
     
     with col2:
         # Get unique risk types
         risk_types = sorted(list(set([a.risk_type for a in all_assessments if a.risk_type])))
         risk_options = ["All"] + risk_types
-        risk_filter = st.selectbox("Filter by Risk Type", risk_options, index=0, key="risk_filter")
+        risk_filter = st.selectbox("Risk Type", risk_options, index=0, key="risk_filter")
     
     with col3:
         # Status filter
-        status_filter = st.selectbox("Filter by Status", ["All", "completed", "draft", "in_progress"], index=0, key="status_filter")
+        status_filter = st.selectbox("Status", ["All", "completed", "draft", "in_progress"], index=0, key="status_filter")
     
     with col4:
         # Date range
@@ -1129,77 +1567,89 @@ def render_past_assessments(db: Session, user: User):
         filtered_assessments = [a for a in filtered_assessments if a.created_at >= cutoff]
     
     # Display count
-    st.markdown(f"**Showing {len(filtered_assessments)} of {len(all_assessments)} assessments**")
-    st.markdown("---")
+    st.markdown(f'<p style="color: #64748b; font-weight: 600; margin: 1.5rem 0 1rem 0;">Showing {len(filtered_assessments)} of {len(all_assessments)} assessments</p>', unsafe_allow_html=True)
     
     if not filtered_assessments:
         st.info("No assessments match the selected filters.")
         return
     
-    # Display assessments in cards
+    # Display assessments in professional cards
     for assessment in filtered_assessments:
-        # Extract risk summary from report (look for CRITICAL/HIGH keywords)
+        # Extract risk summary from report
         report_text = assessment.assessment_report or ""
         critical_count = report_text.upper().count("CRITICAL")
         high_count = report_text.upper().count("HIGH")
         medium_count = report_text.upper().count("MEDIUM")
         
-        # Create assessment card
+        # Create professional assessment card
         with st.container():
             st.markdown(f"""
-            <div style="background: white; padding: 1.5rem; border-radius: 12px; border: 2px solid #e2e8f0; margin-bottom: 1.5rem;">
-                <h3 style="margin: 0 0 0.5rem 0; color: #1e293b;">🔍 {assessment.project_name}</h3>
-                <p style="color: #64748b; margin: 0 0 0.5rem 0;">
-                    <strong>Date:</strong> {assessment.created_at.strftime('%B %d, %Y at %H:%M')} | 
-                    <strong>Framework:</strong> {assessment.framework} | 
-                    <strong>Status:</strong> <span style="color: #22c55e; font-weight: 600;">{assessment.status.upper()}</span>
-                </p>
-                <div style="margin-top: 0.25rem;">
-                    <span style="background:#fee2e2;color:#991b1b;padding:4px 10px;border-radius:999px;margin-right:8px;font-weight:600;">CRITICAL {critical_count}</span>
-                    <span style="background:#ffedd5;color:#9a3412;padding:4px 10px;border-radius:999px;margin-right:8px;font-weight:600;">HIGH {high_count}</span>
-                    <span style="background:#fef3c7;color:#92400e;padding:4px 10px;border-radius:999px;margin-right:8px;font-weight:600;">MEDIUM {medium_count}</span>
+            <div style="
+                background: white; 
+                padding: 2rem; 
+                border-radius: 16px; 
+                border: 2px solid #e2e8f0; 
+                margin-bottom: 1.5rem;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+                transition: all 0.3s ease;
+            ">
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
+                    <h3 style="margin: 0; color: #0f172a; font-weight: 700; font-size: 1.5rem;">🔍 {assessment.project_name}</h3>
+                    <span class="status-badge" style="background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; padding: 0.375rem 0.875rem; border-radius: 8px; font-weight: 600; font-size: 0.8rem; text-transform: uppercase;">{assessment.status}</span>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin: 1rem 0;">
+                    <div>
+                        <p style="color: #64748b; font-size: 0.85rem; margin: 0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Date</p>
+                        <p style="color: #0f172a; margin: 0.25rem 0 0 0; font-weight: 600;">{assessment.created_at.strftime('%b %d, %Y')}</p>
+                    </div>
+                    <div>
+                        <p style="color: #64748b; font-size: 0.85rem; margin: 0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Framework</p>
+                        <p style="color: #0f172a; margin: 0.25rem 0 0 0; font-weight: 600;">{assessment.framework}</p>
+                    </div>
+                    <div>
+                        <p style="color: #64748b; font-size: 0.85rem; margin: 0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Risk Areas</p>
+                        <p style="color: #0f172a; margin: 0.25rem 0 0 0; font-weight: 600;">{assessment.risk_type[:30]}...</p>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 1rem; margin-top: 1.5rem; flex-wrap: wrap;">
+                    <div style="background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); padding: 0.75rem 1.25rem; border-radius: 12px; flex: 1; min-width: 150px; border: 1px solid #fecaca;">
+                        <p style="color: #991b1b; font-size: 0.8rem; margin: 0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">🔴 Critical</p>
+                        <p style="color: #991b1b; font-size: 1.75rem; margin: 0.25rem 0 0 0; font-weight: 800;">{critical_count}</p>
+                    </div>
+                    <div style="background: linear-gradient(135deg, #fed7aa 0%, #fdba74 100%); padding: 0.75rem 1.25rem; border-radius: 12px; flex: 1; min-width: 150px; border: 1px solid #fdba74;">
+                        <p style="color: #9a3412; font-size: 0.8rem; margin: 0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">🟠 High</p>
+                        <p style="color: #9a3412; font-size: 1.75rem; margin: 0.25rem 0 0 0; font-weight: 800;">{high_count}</p>
+                    </div>
+                    <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); padding: 0.75rem 1.25rem; border-radius: 12px; flex: 1; min-width: 150px; border: 1px solid #fde68a;">
+                        <p style="color: #92400e; font-size: 0.8rem; margin: 0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">🟡 Medium</p>
+                        <p style="color: #92400e; font-size: 1.75rem; margin: 0.25rem 0 0 0; font-weight: 800;">{medium_count}</p>
+                    </div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
             
-            # Risk Summary and Download section
-            col_summary, col_download = st.columns([2, 1])
+            # Download buttons
+            col_download1, col_download2, col_spacer = st.columns([1, 1, 2])
             
-            with col_summary:
-                st.markdown("#### 📊 Risk Summary")
-                
-                # Risk metrics in columns
-                risk_col1, risk_col2, risk_col3 = st.columns(3)
-                with risk_col1:
-                    st.metric("🔴 Critical", critical_count, delta=None)
-                with risk_col2:
-                    st.metric("🟠 High", high_count, delta=None)
-                with risk_col3:
-                    st.metric("🟡 Medium", medium_count, delta=None)
-                
-                # Risk areas covered
-                st.markdown(f"**Risk Areas:** {assessment.risk_type}")
-            
-            with col_download:
-                st.markdown("#### 📥 Download")
-                
+            with col_download1:
                 # PDF Download
                 filename, content, mime = create_pdf_download(
                     assessment.assessment_report,
                     assessment.project_name
                 )
                 st.download_button(
-                    "📄 Download PDF" if mime == "application/pdf" else "📄 Download Report",
+                    "📄 Download PDF",
                     content,
                     file_name=filename,
                     mime=mime,
                     key=f"pdf_{assessment.id}",
                     use_container_width=True
                 )
-                
+            
+            with col_download2:
                 # Markdown Download
                 st.download_button(
-                    "📝 Download Markdown",
+                    "📝 Markdown",
                     assessment.assessment_report,
                     file_name=f"{assessment.project_name}_assessment_{assessment.id}.md",
                     mime="text/markdown",
@@ -1208,10 +1658,10 @@ def render_past_assessments(db: Session, user: User):
                 )
             
             # View full report in expander
-            with st.expander("📖 View Full Report"):
+            with st.expander("📖 View Full Report", expanded=False):
                 st.markdown(assessment.assessment_report)
             
-            st.markdown("---")
+            st.markdown("<br>", unsafe_allow_html=True)
 
 
 def main():
@@ -1226,12 +1676,12 @@ def main():
 
         render_sidebar(user)
         
-        # Hero section at the top
+        # Professional Hero Banner
         st.markdown(
             """
-            <div style='text-align: center; padding: 1rem 0 2rem 0;'>
-                <h1>🔒 AI-Powered Threat Modeling Tool</h1>
-                <p style='color: #64748b; font-size: 1.1rem;'>Enterprise-grade threat assessment powered by SecureAI</p>
+            <div class='hero-banner' style='position: relative; z-index: 1;'>
+                <h1 style='text-align: center; margin-bottom: 0.5rem;'>🚀 AI-Powered Threat Modeling</h1>
+                <p style='text-align: center; font-size: 1.15rem; opacity: 0.95;'>Enterprise-grade security assessments powered by SecureAI</p>
             </div>
             """,
             unsafe_allow_html=True,
