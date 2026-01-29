@@ -7,20 +7,26 @@ from fastapi import FastAPI, Depends, HTTPException, status, Header, Request, Re
 from fastapi.security import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, PlainTextResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from sqlalchemy.orm import Session
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 from datetime import datetime
 import anthropic
 import os
+import secrets
 
 from models import (
     Organization, User, APIKey, AuditLog, APIUsageLog, 
     ThreatAssessment, UsageStats
 )
 from database import get_db, engine
-from auth import SessionManager, SAMLAuthHandler
+from auth import SessionManager, SAMLAuthHandler, InputValidator
 
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address)
 
 # Initialize FastAPI
 app = FastAPI(
@@ -31,13 +37,41 @@ app = FastAPI(
     redoc_url="/api/redoc"
 )
 
-# CORS middleware
+# Add rate limit handler
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Security headers middleware
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    
+    # Security headers
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    
+    # Remove server header
+    response.headers.pop("Server", None)
+    
+    return response
+
+# CORS middleware - Configure allowed origins from environment
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:8501").split(",")
+if "*" in allowed_origins and os.getenv("ENVIRONMENT", "development").lower() in ["production", "prod"]:
+    raise RuntimeError("CRITICAL: Wildcard CORS (*) not allowed in production!")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+    allow_headers=["Content-Type", "Authorization", "X-API-Key"],
+    max_age=3600,  # Cache preflight requests for 1 hour
 )
 
 # API Key authentication
@@ -46,12 +80,17 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 # Pydantic models for API requests/responses
 class ThreatModelingRequest(BaseModel):
-    project_name: str = Field(..., description="Name of the project")
-    system_description: str = Field(..., description="Description of the system to analyze")
+    project_name: str = Field(..., description="Name of the project", min_length=1, max_length=255)
+    system_description: str = Field(..., description="Description of the system to analyze", min_length=10, max_length=50000)
     framework: str = Field(..., description="Threat modeling framework (STRIDE, MITRE ATT&CK, PASTA, etc.)")
-    risk_type: Optional[str] = Field(None, description="Type of risk assessment (Agentic AI, Model Risk, etc.)")
-    company_name: Optional[str] = Field(None, description="Company name for report branding")
+    risk_type: Optional[str] = Field(None, description="Type of risk assessment (Agentic AI, Model Risk, etc.)", max_length=100)
+    company_name: Optional[str] = Field(None, description="Company name for report branding", max_length=255)
     additional_context: Optional[Dict[str, Any]] = Field(None, description="Additional context for analysis")
+    
+    @validator('project_name', 'system_description', 'framework')
+    def sanitize_text_fields(cls, v):
+        """Sanitize text inputs"""
+        return InputValidator.sanitize_text(v, max_length=50000)
 
 
 class ThreatModelingResponse(BaseModel):
@@ -121,11 +160,25 @@ class UsageStatsResponse(BaseModel):
 @app.on_event("startup")
 async def on_startup():
     secret = os.getenv("JWT_SECRET_KEY")
-    if secret:
-        SessionManager.init_secret_key(secret)
-    else:
-        # Fallback weak secret for dev only
-        SessionManager.init_secret_key("dev-secret-change-me")
+    if not secret:
+        # Check if in production environment
+        env = os.getenv("ENVIRONMENT", "development").lower()
+        if env in ["production", "prod"]:
+            raise RuntimeError(
+                "CRITICAL: JWT_SECRET_KEY environment variable not set in production! "
+                "Generate one with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+            )
+        else:
+            # Only allow fallback in development
+            import warnings
+            warnings.warn(
+                "SECURITY WARNING: Using weak JWT secret in development. "
+                "Set JWT_SECRET_KEY environment variable!",
+                SecurityWarning
+            )
+            secret = "dev-secret-change-me-" + secrets.token_hex(16)
+    
+    SessionManager.init_secret_key(secret)
 
 
 # Dependency to get current API key and user
@@ -224,12 +277,14 @@ async def log_api_usage(
 # API Endpoints
 
 @app.get("/api/health")
-async def health_check():
+@limiter.limit("60/minute")
+async def health_check(request: Request):
     """Health check endpoint"""
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
 
 
 @app.post("/api/v1/threat-modeling", response_model=ThreatModelingResponse)
+@limiter.limit("10/minute")  # Limit AI calls to prevent abuse
 async def create_threat_assessment(
     request: Request,
     threat_request: ThreatModelingRequest,
@@ -237,16 +292,23 @@ async def create_threat_assessment(
     api_key: APIKey = Depends(require_scope("threat_modeling:write")),
     db: Session = Depends(get_db)
 ):
-    """Create a new threat assessment using AI"""
+    """Create a new threat assessment using AI (rate limited to 10/minute)"""
     start_time = datetime.utcnow()
     
     try:
+        # Validate inputs
+        if len(threat_request.system_description) < 10:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="System description too short (minimum 10 characters)"
+            )
+        
         # Initialize Anthropic client
         anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
-        if not anthropic_api_key:
+        if not anthropic_api_key or anthropic_api_key.startswith("sk-ant-api03-CHANGE"):
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="AI service not configured"
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="AI service temporarily unavailable"
             )
         
         client = anthropic.Anthropic(api_key=anthropic_api_key)
@@ -269,16 +331,23 @@ Please provide:
 5. Compliance considerations
 """
         
-        # Call Claude AI
-        message = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
-            max_tokens=4000,
-            messages=[
-                {"role": "user", "content": prompt}
-            ]
-        )
-        
-        report = message.content[0].text
+        # Call Claude AI with error handling
+        try:
+            message = client.messages.create(
+                model="claude-3-5-sonnet-20241022",
+                max_tokens=4000,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            report = message.content[0].text
+        except Exception as ai_error:
+            # Log error but don't expose internal details
+            print(f"AI Service Error: {str(ai_error)}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Unable to generate threat assessment. Please try again later."
+            )
         
         # Create threat assessment record
         assessment = ThreatAssessment(

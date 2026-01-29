@@ -5,6 +5,14 @@ Authentication module for SSO (SAML) and session management
 from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
 import secrets
+import re
+
+# Input sanitization
+try:
+    import bleach
+    BLEACH_AVAILABLE = True
+except ImportError:
+    BLEACH_AVAILABLE = False
 
 # Make SAML imports optional (not available on Railway without system dependencies)
 try:
@@ -230,23 +238,84 @@ class SessionManager:
         return user
 
 
+class InputValidator:
+    """Validate and sanitize user inputs"""
+    
+    @staticmethod
+    def sanitize_text(text: str, max_length: int = 10000) -> str:
+        """Sanitize text input to prevent XSS and injection attacks"""
+        if not text:
+            return ""
+        
+        # Limit length
+        text = text[:max_length]
+        
+        # Use bleach if available
+        if BLEACH_AVAILABLE:
+            # Allow only safe HTML tags for markdown content
+            allowed_tags = ['p', 'br', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'ul', 'ol', 'li', 'code', 'pre']
+            text = bleach.clean(text, tags=allowed_tags, strip=True)
+        
+        return text.strip()
+    
+    @staticmethod
+    def validate_email(email: str) -> bool:
+        """Validate email format"""
+        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        return bool(re.match(pattern, email)) and len(email) <= 255
+    
+    @staticmethod
+    def validate_username(username: str) -> bool:
+        """Validate username format (alphanumeric, underscore, hyphen)"""
+        pattern = r'^[a-zA-Z0-9_-]{3,50}$'
+        return bool(re.match(pattern, username))
+    
+    @staticmethod
+    def sanitize_filename(filename: str) -> str:
+        """Sanitize filename to prevent directory traversal"""
+        # Remove path separators and null bytes
+        filename = filename.replace('/', '').replace('\\', '').replace('\x00', '')
+        # Remove leading dots
+        filename = filename.lstrip('.')
+        # Limit length
+        return filename[:255]
+
+
 class PasswordAuth:
     """Handle password-based authentication (fallback for non-SSO users)"""
     
     @staticmethod
     def hash_password(password: str) -> str:
-        """Hash a password using SHA256 with salt"""
-        salt = secrets.token_hex(16)
-        pwd_hash = hashlib.sha256((password + salt).encode()).hexdigest()
-        return f"{salt}${pwd_hash}"
+        """Hash a password using bcrypt (secure, slow by design)"""
+        try:
+            import bcrypt
+            # bcrypt automatically generates salt and handles iterations
+            pwd_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt(rounds=12))
+            return pwd_hash.decode('utf-8')
+        except ImportError:
+            # Fallback to SHA256 only if bcrypt not available (NOT RECOMMENDED)
+            salt = secrets.token_hex(16)
+            pwd_hash = hashlib.sha256((password + salt).encode()).hexdigest()
+            return f"sha256${salt}${pwd_hash}"
     
     @staticmethod
     def verify_password(password: str, password_hash: str) -> bool:
-        """Verify a password against its hash"""
+        """Verify a password against its hash (supports both bcrypt and legacy SHA256)"""
         try:
-            salt, pwd_hash = password_hash.split('$')
-            computed_hash = hashlib.sha256((password + salt).encode()).hexdigest()
-            return computed_hash == pwd_hash
+            import bcrypt
+            # Check if it's a bcrypt hash (starts with $2b$)
+            if password_hash.startswith('$2'):
+                return bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
+            # Legacy SHA256 support for existing passwords
+            elif password_hash.startswith('sha256$'):
+                _, salt, pwd_hash = password_hash.split('$')
+                computed_hash = hashlib.sha256((password + salt).encode()).hexdigest()
+                return computed_hash == pwd_hash
+            # Old format without prefix (legacy)
+            else:
+                salt, pwd_hash = password_hash.split('$')
+                computed_hash = hashlib.sha256((password + salt).encode()).hexdigest()
+                return computed_hash == pwd_hash
         except Exception:
             return False
     
