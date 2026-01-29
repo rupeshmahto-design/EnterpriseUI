@@ -18,12 +18,41 @@ from sqlalchemy.orm import Session
 
 import admin_dashboard
 from auth import PasswordAuth
-from database import SessionLocal, init_db
+from database import SessionLocal, init_db, engine
 from models import ThreatAssessment, User, Organization
+
+# Apply migration before any database operations
+def apply_project_number_migration():
+    """Apply project_number column migration if it doesn't exist"""
+    from sqlalchemy import text
+    db = SessionLocal()
+    try:
+        result = db.execute(text("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name='threat_assessments' 
+            AND column_name='project_number'
+        """))
+        
+        if not result.fetchone():
+            print("🔄 Applying migration: Adding project_number column...")
+            db.execute(text("ALTER TABLE threat_assessments ADD COLUMN project_number VARCHAR(100)"))
+            db.execute(text("CREATE INDEX ix_threat_assessments_project_number ON threat_assessments (project_number)"))
+            db.commit()
+            print("✅ Migration applied successfully!")
+        else:
+            print("✅ Migration already applied")
+    except Exception as e:
+        print(f"Migration check: {e}")
+        db.rollback()
+    finally:
+        db.close()
 
 # Initialize database tables and seed data on startup
 try:
     init_db()
+    apply_project_number_migration()
+    
     # Seed initial admin user if database is empty
     db = SessionLocal()
     try:
