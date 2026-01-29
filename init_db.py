@@ -17,11 +17,51 @@ from models import Organization, User, APIKey, Base
 from auth import PasswordAuth
 
 
+def apply_migration_if_needed():
+    """Apply project_number column migration if it doesn't exist"""
+    db = SessionLocal()
+    try:
+        # Check if project_number column exists
+        result = db.execute(text("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name='threat_assessments' 
+            AND column_name='project_number'
+        """))
+        
+        if result.fetchone():
+            print("✅ Migration already applied (project_number exists)")
+        else:
+            print("🔄 Applying migration: Adding project_number column...")
+            # Add the column
+            db.execute(text("""
+                ALTER TABLE threat_assessments 
+                ADD COLUMN project_number VARCHAR(100)
+            """))
+            
+            # Create index
+            db.execute(text("""
+                CREATE INDEX ix_threat_assessments_project_number 
+                ON threat_assessments (project_number)
+            """))
+            
+            db.commit()
+            print("✅ Migration applied successfully!")
+    except Exception as e:
+        print(f"⚠️ Migration note: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
 def create_tables():
     """Create all database tables"""
     print("Creating database tables...")
     Base.metadata.create_all(bind=engine)
     print("✅ Tables created successfully!")
+    
+    # Apply missing columns migration if needed
+    apply_migration_if_needed()
 
 
 def seed_initial_data():
