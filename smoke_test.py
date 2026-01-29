@@ -53,8 +53,27 @@ fake_anthropic.Anthropic = _AnthropicStub
 sys.modules['anthropic'] = fake_anthropic
 
 # Mock database modules
+class _FakeDBSession:
+    def execute(self, *args, **kwargs):
+        class FakeResult:
+            def fetchone(self): return None
+        return FakeResult()
+    def commit(self): pass
+    def rollback(self): pass
+    def close(self): pass
+    def query(self, *args, **kwargs):
+        class FakeQuery:
+            def count(self): return 1
+            def first(self): return None
+            def all(self): return []
+            def filter(self, *args, **kwargs): return self
+            def order_by(self, *args, **kwargs): return self
+        return FakeQuery()
+
 fake_db = types.SimpleNamespace()
-fake_db.SessionLocal = lambda: None
+fake_db.SessionLocal = lambda: _FakeDBSession()
+fake_db.init_db = lambda: None
+fake_db.engine = types.SimpleNamespace()
 sys.modules['database'] = fake_db
 
 fake_models = types.SimpleNamespace()
