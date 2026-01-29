@@ -10,6 +10,7 @@ from typing import List
 from datetime import datetime
 from pathlib import Path
 import json
+from zoneinfo import ZoneInfo
 
 import anthropic
 import streamlit as st
@@ -897,7 +898,15 @@ def create_pdf_download(report_content, project_name):
     from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
     import re
     
-    base = f"Threat_Assessment_{project_name.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}"
+    # Use current date/time (with optional timezone support)
+    try:
+        # Try to use Australia/Sydney timezone
+        current_date = datetime.now(ZoneInfo("Australia/Sydney"))
+    except:
+        # Fallback to UTC if timezone not available
+        current_date = datetime.now()
+    
+    base = f"Threat_Assessment_{project_name.replace(' ', '_')}_{current_date.strftime('%Y%m%d')}"
     pdf_filename = f"{base}.pdf"
     
     # Create PDF buffer
@@ -951,7 +960,7 @@ def create_pdf_download(report_content, project_name):
     story.append(Paragraph("Threat Assessment Report", title_style))
     story.append(Spacer(1, 0.15*inch))
     story.append(Paragraph(f"<b>Project:</b> {project_name}", body_style))
-    story.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%B %d, %Y')}", body_style))
+    story.append(Paragraph(f"<b>Date:</b> {current_date.strftime('%B %d, %Y')}", body_style))
     story.append(Spacer(1, 0.3*inch))
     
     # Parse markdown content
@@ -1378,6 +1387,7 @@ Generate the complete, detailed, professionally formatted threat assessment repo
         organization_id=user.organization_id,
         user_id=user.id,
         project_name=project_info['name'],
+        project_number=project_info.get('number', None),
         framework=framework,
         risk_type=', '.join(risk_areas[:3]),
         system_description=documents_content[:500],
@@ -1588,7 +1598,7 @@ def render_threat_assessment_form(db: Session, user: User):
             st.session_state.current_uploaded_files = []
             # Reset all form fields (exclude widget keys like uploaded_files)
             form_keys = [
-                "project_name", "app_type", "deployment", "criticality", 
+                "project_name", "project_number", "app_type", "deployment", "criticality", 
                 "compliance", "environment"
             ]
             for key in form_keys:
@@ -1606,6 +1616,7 @@ def render_threat_assessment_form(db: Session, user: User):
     col1, col2 = st.columns(2)
     with col1:
         project_name = st.text_input("Project Name *", placeholder="e.g., Customer Portal Application", key="project_name")
+        project_number = st.text_input("Project Number", placeholder="e.g., PRJ-2026-001", key="project_number", help="Optional: Project number for version tracking")
         app_type = st.selectbox("Application Type *", 
             ["Web Application", "Mobile Application", "API/Microservice", 
              "Desktop Application", "Cloud Service", "IoT System", "AI/ML Platform"],
@@ -1708,6 +1719,7 @@ def render_threat_assessment_form(db: Session, user: User):
                 
                 project_info = {
                     'name': project_name,
+                    'number': st.session_state.get('project_number', ''),
                     'app_type': app_type,
                     'deployment': deployment,
                     'criticality': criticality,
@@ -1754,8 +1766,12 @@ def render_threat_assessment_form(db: Session, user: User):
                 st.caption("⚠️ PDF generation requires weasyprint. Downloading as Markdown.")
         
         with col2:
-            # Markdown Download
-            md_filename = f"Threat_Assessment_{project_name_display.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.md"
+            # Markdown Download - use current date with timezone support
+            try:
+                current_date = datetime.now(ZoneInfo("Australia/Sydney"))
+            except:
+                current_date = datetime.now()
+            md_filename = f"Threat_Assessment_{project_name_display.replace(' ', '_')}_{current_date.strftime('%Y%m%d')}.md"
             st.download_button(
                 "📄 Download as Markdown",
                 st.session_state.threat_report,
@@ -1791,9 +1807,9 @@ def render_threat_assessment_form(db: Session, user: User):
 
 
 def render_past_assessments(db: Session, user: User):
-    """Render past assessments with filters and enhanced presentation"""
+    """Render past assessments with filters, project grouping, and version history"""
     st.markdown("# 📚 Past Assessments")
-    st.markdown('<p style="color: #64748b; font-size: 1.05rem; margin-bottom: 2rem;">View and manage all your threat assessment reports</p>', unsafe_allow_html=True)
+    st.markdown('<p style="color: #64748b; font-size: 1.05rem; margin-bottom: 2rem;">View and manage all your threat assessment reports with version history</p>', unsafe_allow_html=True)
     
     # Get all assessments for this user
     all_assessments = (
@@ -1818,8 +1834,19 @@ def render_past_assessments(db: Session, user: User):
         recent = len([a for a in all_assessments if (datetime.utcnow() - a.created_at).days <= 7])
         st.metric("🕐 Last 7 Days", recent)
     with metric_col4:
-        frameworks_used = len(set([a.framework for a in all_assessments if a.framework]))
-        st.metric("🎯 Frameworks Used", frameworks_used)
+        # Count unique projects with project numbers
+        unique_projects = len(set([a.project_number for a in all_assessments if a.project_number]))
+        st.metric("🔢 Unique Projects", unique_projects)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # View Mode Toggle
+    view_mode = st.radio(
+        "View Mode", 
+        ["📋 All Assessments", "📊 Group by Project Number"],
+        horizontal=True,
+        help="Switch between viewing all assessments or grouping by project number"
+    )
     
     st.markdown("<br>", unsafe_allow_html=True)
     
@@ -1882,19 +1909,160 @@ def render_past_assessments(db: Session, user: User):
         st.info("No assessments match the selected filters.")
         return
     
-    # Display assessments in professional cards
-    for assessment in filtered_assessments:
-        # Extract risk summary from report
-        report_text = assessment.assessment_report or ""
-        critical_count = report_text.upper().count("CRITICAL")
-        high_count = report_text.upper().count("HIGH")
-        medium_count = report_text.upper().count("MEDIUM")
+    # Display based on view mode
+    if view_mode == "📊 Group by Project Number":
+        # Group assessments by project number
+        from collections import defaultdict
+        project_groups = defaultdict(list)
         
-        # Create professional assessment card
-        with st.container():
+        for assessment in filtered_assessments:
+            proj_num = assessment.project_number if assessment.project_number else "No Project Number"
+            project_groups[proj_num].append(assessment)
+        
+        # Display each project group
+        for project_number in sorted(project_groups.keys(), reverse=(project_number != "No Project Number")):
+            assessments_in_project = sorted(project_groups[project_number], key=lambda x: x.created_at, reverse=True)
+            
+            # Project header
             st.markdown(f"""
             <div style="
-                background: white; 
+                background: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%);
+                padding: 1rem 1.5rem;
+                border-radius: 12px;
+                margin: 1.5rem 0 1rem 0;
+                box-shadow: 0 4px 12px rgba(8, 145, 178, 0.2);
+            ">
+                <h3 style="margin: 0; color: white; font-weight: 700; font-size: 1.4rem;">
+                    📁 Project: {project_number}
+                </h3>
+                <p style="margin: 0.5rem 0 0 0; color: rgba(255, 255, 255, 0.9); font-size: 0.95rem;">
+                    {len(assessments_in_project)} version{'' if len(assessments_in_project) == 1 else 's'} • 
+                    Latest: {assessments_in_project[0].created_at.strftime('%B %d, %Y')}
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Version history table
+            st.markdown("#### 📜 Version History")
+            
+            # Create a version table
+            for idx, assessment in enumerate(assessments_in_project, 1):
+                version_number = len(assessments_in_project) - idx + 1
+                
+                # Extract risk summary
+                report_text = assessment.assessment_report or ""
+                critical_count = report_text.upper().count("CRITICAL")
+                high_count = report_text.upper().count("HIGH")
+                medium_count = report_text.upper().count("MEDIUM")
+                
+                # Version card with collapsible details
+                with st.expander(
+                    f"🔖 Version {version_number} - {assessment.project_name} ({assessment.created_at.strftime('%b %d, %Y at %H:%M')})",
+                    expanded=(idx == 0)
+                ):
+                    col_info1, col_info2, col_info3 = st.columns(3)
+                    
+                    with col_info1:
+                        st.markdown(f"""
+                        <div style="background: #f9fafb; padding: 0.75rem; border-radius: 8px; border: 1px solid #e5e7eb;">
+                            <p style="color: #64748b; font-size: 0.8rem; margin: 0; font-weight: 600;">FRAMEWORK</p>
+                            <p style="color: #0f172a; margin: 0.25rem 0 0 0; font-weight: 600; font-size: 0.95rem;">{assessment.framework}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with col_info2:
+                        st.markdown(f"""
+                        <div style="background: #f9fafb; padding: 0.75rem; border-radius: 8px; border: 1px solid #e5e7eb;">
+                            <p style="color: #64748b; font-size: 0.8rem; margin: 0; font-weight: 600;">STATUS</p>
+                            <p style="color: #0f172a; margin: 0.25rem 0 0 0; font-weight: 600; font-size: 0.95rem;">{assessment.status.upper()}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with col_info3:
+                        st.markdown(f"""
+                        <div style="background: #f9fafb; padding: 0.75rem; border-radius: 8px; border: 1px solid #e5e7eb;">
+                            <p style="color: #64748b; font-size: 0.8rem; margin: 0; font-weight: 600;">RISK AREAS</p>
+                            <p style="color: #0f172a; margin: 0.25rem 0 0 0; font-weight: 600; font-size: 0.85rem;">{assessment.risk_type[:30] if assessment.risk_type else 'N/A'}...</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    
+                    # Risk metrics
+                    risk_col1, risk_col2, risk_col3 = st.columns(3)
+                    with risk_col1:
+                        st.markdown(f"""
+                        <div style="background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); padding: 0.75rem; border-radius: 10px; text-align: center; border: 1px solid #fecaca;">
+                            <p style="color: #991b1b; font-size: 0.75rem; margin: 0; font-weight: 700;">🔴 CRITICAL</p>
+                            <p style="color: #991b1b; font-size: 1.5rem; margin: 0.25rem 0 0 0; font-weight: 800;">{critical_count}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with risk_col2:
+                        st.markdown(f"""
+                        <div style="background: linear-gradient(135deg, #fed7aa 0%, #fdba74 100%); padding: 0.75rem; border-radius: 10px; text-align: center; border: 1px solid #fdba74;">
+                            <p style="color: #9a3412; font-size: 0.75rem; margin: 0; font-weight: 700;">🟠 HIGH</p>
+                            <p style="color: #9a3412; font-size: 1.5rem; margin: 0.25rem 0 0 0; font-weight: 800;">{high_count}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with risk_col3:
+                        st.markdown(f"""
+                        <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); padding: 0.75rem; border-radius: 10px; text-align: center; border: 1px solid #fde68a;">
+                            <p style="color: #92400e; font-size: 0.75rem; margin: 0; font-weight: 700;">🟡 MEDIUM</p>
+                            <p style="color: #92400e; font-size: 1.5rem; margin: 0.25rem 0 0 0; font-weight: 800;">{medium_count}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    
+                    # Download buttons
+                    dl_col1, dl_col2 = st.columns(2)
+                    
+                    with dl_col1:
+                        filename, content, mime = create_pdf_download(
+                            assessment.assessment_report,
+                            f"{assessment.project_name}_v{version_number}"
+                        )
+                        st.download_button(
+                            "📄 Download PDF",
+                            content,
+                            file_name=filename,
+                            mime=mime,
+                            key=f"pdf_v{assessment.id}",
+                            use_container_width=True
+                        )
+                    
+                    with dl_col2:
+                        st.download_button(
+                            "📝 Markdown",
+                            assessment.assessment_report,
+                            file_name=f"{assessment.project_name}_v{version_number}.md",
+                            mime="text/markdown",
+                            key=f"md_v{assessment.id}",
+                            use_container_width=True
+                        )
+                    
+                    # View report
+                    with st.expander("📖 View Full Report"):
+                        st.markdown(assessment.assessment_report)
+            
+            st.markdown("<hr style='margin: 2rem 0; border: none; border-top: 2px solid #e5e7eb;'>", unsafe_allow_html=True)
+    
+    else:
+        # Display assessments in standard list view
+        for assessment in filtered_assessments:
+            # Extract risk summary from report
+            report_text = assessment.assessment_report or ""
+            critical_count = report_text.upper().count("CRITICAL")
+            high_count = report_text.upper().count("HIGH")
+            medium_count = report_text.upper().count("MEDIUM")
+            
+            # Create professional assessment card
+            with st.container():
+                st.markdown(f"""
+                <div style="
+                    background: white; 
                 padding: 2rem; 
                 border-radius: 16px; 
                 border: 2px solid #e2e8f0; 
@@ -1934,43 +2102,43 @@ def render_past_assessments(db: Session, user: User):
                         <p style="color: #92400e; font-size: 1.75rem; margin: 0.25rem 0 0 0; font-weight: 800;">{medium_count}</p>
                     </div>
                 </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Download buttons
-            col_download1, col_download2, col_spacer = st.columns([1, 1, 2])
-            
-            with col_download1:
-                # PDF Download
-                filename, content, mime = create_pdf_download(
-                    assessment.assessment_report,
-                    assessment.project_name
-                )
-                st.download_button(
-                    "📄 Download PDF",
-                    content,
-                    file_name=filename,
-                    mime=mime,
-                    key=f"pdf_{assessment.id}",
-                    use_container_width=True
-                )
-            
-            with col_download2:
-                # Markdown Download
-                st.download_button(
-                    "📝 Markdown",
-                    assessment.assessment_report,
-                    file_name=f"{assessment.project_name}_assessment_{assessment.id}.md",
-                    mime="text/markdown",
-                    key=f"md_{assessment.id}",
-                    use_container_width=True
-                )
-            
-            # View full report in expander
-            with st.expander("📖 View Full Report", expanded=False):
-                st.markdown(assessment.assessment_report)
-            
-            st.markdown("<br>", unsafe_allow_html=True)
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Download buttons
+                col_download1, col_download2, col_spacer = st.columns([1, 1, 2])
+                
+                with col_download1:
+                    # PDF Download
+                    filename, content, mime = create_pdf_download(
+                        assessment.assessment_report,
+                        assessment.project_name
+                    )
+                    st.download_button(
+                        "📄 Download PDF",
+                        content,
+                        file_name=filename,
+                        mime=mime,
+                        key=f"pdf_{assessment.id}",
+                        use_container_width=True
+                    )
+                
+                with col_download2:
+                    # Markdown Download
+                    st.download_button(
+                        "📝 Markdown",
+                        assessment.assessment_report,
+                        file_name=f"{assessment.project_name}_assessment_{assessment.id}.md",
+                        mime="text/markdown",
+                        key=f"md_{assessment.id}",
+                        use_container_width=True
+                    )
+                
+                # View full report in expander
+                with st.expander("📖 View Full Report", expanded=False):
+                    st.markdown(assessment.assessment_report)
+                
+                st.markdown("<br>", unsafe_allow_html=True)
 
 
 def main():

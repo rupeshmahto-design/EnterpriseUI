@@ -216,6 +216,7 @@ class ThreatAssessment(Base):
     
     # Assessment details
     project_name = Column(String(255), nullable=False)
+    project_number = Column(String(100), index=True)  # For grouping assessments by project
     framework = Column(String(50), nullable=False)  # STRIDE, MITRE ATT&CK, etc.
     risk_type = Column(String(50))  # Agentic AI, Model Risk, etc.
     
