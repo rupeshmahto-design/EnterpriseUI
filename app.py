@@ -2084,8 +2084,10 @@ def render_past_assessments(db: Session, user: User):
                             use_container_width=True
                         )
                     
-                    # View report
-                    with st.expander("📖 View Full Report"):
+                    # Show report button (toggle view)
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    if st.button("📖 View Full Report", key=f"view_report_v{assessment.id}", use_container_width=True):
+                        st.markdown("---")
                         st.markdown(assessment.assessment_report)
             
             st.markdown("<hr style='margin: 2rem 0; border: none; border-top: 2px solid #e5e7eb;'>", unsafe_allow_html=True)
