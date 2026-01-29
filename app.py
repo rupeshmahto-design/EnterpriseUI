@@ -1127,18 +1127,39 @@ def create_reportlab_table(table_data):
             # Clean and wrap cell text
             cell_text = str(cell).strip()
             
-            # Replace markdown bold with HTML bold
+            # Replace markdown bold with HTML bold first
             cell_text = cell_text.replace('**', '<b>').replace('**', '</b>')
             
             # Convert risk level tags to colored text
-            # Handle patterns like <b>CRITICAL<b>, <b>HIGH<b>, etc.
             import re
             
-            # Fix malformed tags (missing closing slash)
-            cell_text = re.sub(r'<b>(CRITICAL|HIGH|MEDIUM|LOW)<b>', r'\1', cell_text)
+            # Fix ALL malformed tags (missing closing slash) - more comprehensive patterns
+            cell_text = re.sub(r'<b>([^<>]*?)<b>', r'<b>\1</b>', cell_text)  # Fix any <b>...<b> to <b>...</b>
+            
+            # Clean up any remaining mismatched tags
+            cell_text = re.sub(r'<b>([^<>]*?)</b>', r'<b>\1</b>', cell_text)  # Ensure proper pairing
+            
+            # Now remove bold tags from risk level keywords so we can reapply with colors
             cell_text = re.sub(r'<b>(CRITICAL|HIGH|MEDIUM|LOW)</b>', r'\1', cell_text)
             
-            # Apply color formatting for risk levels
+            # Handle compound patterns like "25-CRITICAL" or "16-HIGH"
+            cell_text = re.sub(
+                r'(\d+)-(CRITICAL)',
+                r'\1-<font color="#dc2626" size="8"><b>\2</b></font>',
+                cell_text
+            )
+            cell_text = re.sub(
+                r'(\d+)-(HIGH)',
+                r'\1-<font color="#ea580c" size="8"><b>\2</b></font>',
+                cell_text
+            )
+            cell_text = re.sub(
+                r'(\d+)-(MEDIUM)',
+                r'\1-<font color="#ca8a04" size="8"><b>\2</b></font>',
+                cell_text
+            )
+            
+            # Apply color formatting for standalone risk levels
             cell_text = re.sub(
                 r'\b(CRITICAL)\b',
                 r'<font color="#dc2626" size="8"><b>\1</b></font>',
