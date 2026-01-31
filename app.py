@@ -1012,13 +1012,8 @@ def create_pdf_download(report_content, project_name):
     from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
     import re
     
-    # Use current date/time (with optional timezone support)
-    try:
-        # Try to use Australia/Sydney timezone
-        current_date = datetime.now(ZoneInfo("Australia/Sydney"))
-    except:
-        # Fallback to UTC if timezone not available
-        current_date = datetime.now()
+    # Use Sydney timezone for PDF filename
+    current_date = get_sydney_time()
     
     base = f"Threat_Assessment_{project_name.replace(' ', '_')}_{current_date.strftime('%Y%m%d')}"
     pdf_filename = f"{base}.pdf"
@@ -1325,6 +1320,30 @@ def create_reportlab_table(table_data):
     return table
 
 
+def get_sydney_time():
+    """Get current time in Sydney, Australia timezone"""
+    try:
+        return datetime.now(ZoneInfo("Australia/Sydney"))
+    except:
+        # Fallback to UTC with offset
+        return datetime.now()
+
+
+def convert_to_sydney_time(utc_datetime):
+    """Convert UTC datetime to Sydney timezone for display"""
+    if utc_datetime is None:
+        return None
+    try:
+        # If datetime is naive (no timezone), assume it's UTC
+        if utc_datetime.tzinfo is None:
+            utc_datetime = utc_datetime.replace(tzinfo=ZoneInfo("UTC"))
+        # Convert to Sydney time
+        return utc_datetime.astimezone(ZoneInfo("Australia/Sydney"))
+    except:
+        # Fallback - return as is
+        return utc_datetime
+
+
 def generate_threat_assessment(project_info, documents_content, framework, risk_areas, user: User, db: Session):
     """Generate comprehensive threat assessment using Claude"""
     api_key = os.getenv("ANTHROPIC_API_KEY", "")
@@ -1332,6 +1351,10 @@ def generate_threat_assessment(project_info, documents_content, framework, risk_
         raise RuntimeError("Missing Anthropic API key in .env (ANTHROPIC_API_KEY)")
 
     client = anthropic.Anthropic(api_key=api_key)
+    
+    # Get current Sydney time for the report
+    sydney_time = get_sydney_time()
+    assessment_date = sydney_time.strftime('%B %d, %Y at %I:%M %p AEDT')
     
     # Comprehensive prompt with document evidence requirements
     prompt = f"""You are an expert cybersecurity consultant specializing in threat modeling and risk assessment. 
@@ -1344,6 +1367,7 @@ Perform a comprehensive threat assessment for the following project using the {f
 - Business Criticality: {project_info['criticality']}
 - Compliance Requirements: {', '.join(project_info['compliance'])}
 - Environment: {project_info['environment']}
+- Assessment Date: {assessment_date}
 
 **UPLOADED DOCUMENTATION:**
 {documents_content}
@@ -2063,7 +2087,8 @@ def render_past_assessments(db: Session, user: User):
         ).scalar()
         st.metric("✅ Completed", completed)
     with metric_col3:
-        cutoff_date = datetime.utcnow() - timedelta(days=7)
+        sydney_now = get_sydney_time()
+        cutoff_date = sydney_now - timedelta(days=7)
         recent = db.query(func.count(ThreatAssessment.id)).filter(
             ThreatAssessment.user_id == user.id,
             ThreatAssessment.created_at >= cutoff_date
@@ -2154,7 +2179,8 @@ def render_past_assessments(db: Session, user: User):
     
     if date_filter != "All Time":
         days_map = {"Last 7 Days": 7, "Last 30 Days": 30, "Last 90 Days": 90}
-        cutoff = datetime.utcnow() - timedelta(days=days_map[date_filter])
+        sydney_now = get_sydney_time()
+        cutoff = sydney_now - timedelta(days=days_map[date_filter])
         query = query.filter(ThreatAssessment.created_at >= cutoff)
     
     # Get filtered count and assessments
@@ -2196,7 +2222,7 @@ def render_past_assessments(db: Session, user: User):
                 </h3>
                 <p style="margin: 0.5rem 0 0 0; color: rgba(255, 255, 255, 0.9); font-size: 0.95rem;">
                     {len(assessments_in_project)} version{'' if len(assessments_in_project) == 1 else 's'} • 
-                    Latest: {assessments_in_project[0].created_at.strftime('%B %d, %Y')}
+                    Latest: {convert_to_sydney_time(assessments_in_project[0].created_at).strftime('%B %d, %Y at %I:%M %p')}
                 </p>
             </div>
             """, unsafe_allow_html=True)
@@ -2215,7 +2241,7 @@ def render_past_assessments(db: Session, user: User):
                 
                 # Version card with collapsible details
                 with st.expander(
-                    f"🔖 Version {version_number} - {assessment.project_name} ({assessment.created_at.strftime('%b %d, %Y at %H:%M')})",
+                    f"🔖 Version {version_number} - {assessment.project_name} ({convert_to_sydney_time(assessment.created_at).strftime('%b %d, %Y at %I:%M %p AEDT')})",
                     expanded=(idx == 0)
                 ):
                     col_info1, col_info2, col_info3 = st.columns(3)
@@ -2348,7 +2374,7 @@ def render_past_assessments(db: Session, user: User):
                 <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin: 1rem 0;">
                     <div>
                         <p style="color: #64748b; font-size: 0.85rem; margin: 0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Date</p>
-                        <p style="color: #0f172a; margin: 0.25rem 0 0 0; font-weight: 600;">{assessment.created_at.strftime('%b %d, %Y')}</p>
+                        <p style="color: #0f172a; margin: 0.25rem 0 0 0; font-weight: 600;">{convert_to_sydney_time(assessment.created_at).strftime('%b %d, %Y at %I:%M %p')}</p>
                     </div>
                     <div>
                         <p style="color: #64748b; font-size: 0.85rem; margin: 0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Framework</p>
