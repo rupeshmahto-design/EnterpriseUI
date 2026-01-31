@@ -21,12 +21,13 @@ from auth import PasswordAuth
 from database import SessionLocal, init_db, engine
 from models import ThreatAssessment, User, Organization
 
-# Apply migration before any database operations
-def apply_project_number_migration():
-    """Apply project_number column migration if it doesn't exist"""
+# Apply migrations before any database operations
+def apply_migrations():
+    """Apply all pending migrations if they don't exist"""
     from sqlalchemy import text
     db = SessionLocal()
     try:
+        # Migration 1: project_number column
         result = db.execute(text("""
             SELECT column_name 
             FROM information_schema.columns 
@@ -37,13 +38,48 @@ def apply_project_number_migration():
         if not result.fetchone():
             print("🔄 Applying migration: Adding project_number column...")
             db.execute(text("ALTER TABLE threat_assessments ADD COLUMN project_number VARCHAR(100)"))
-            db.execute(text("CREATE INDEX ix_threat_assessments_project_number ON threat_assessments (project_number)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS ix_threat_assessments_project_number ON threat_assessments (project_number)"))
             db.commit()
-            print("✅ Migration applied successfully!")
+            print("✅ project_number migration applied!")
+        
+        # Migration 2: Performance indexes and risk count cache
+        result = db.execute(text("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name='threat_assessments' 
+            AND column_name='critical_count'
+        """))
+        
+        if not result.fetchone():
+            print("🔄 Applying performance optimization migration...")
+            
+            # Add risk count columns
+            db.execute(text("ALTER TABLE threat_assessments ADD COLUMN critical_count INTEGER DEFAULT 0"))
+            db.execute(text("ALTER TABLE threat_assessments ADD COLUMN high_count INTEGER DEFAULT 0"))
+            db.execute(text("ALTER TABLE threat_assessments ADD COLUMN medium_count INTEGER DEFAULT 0"))
+            
+            # Add indexes for frequently filtered columns
+            db.execute(text("CREATE INDEX IF NOT EXISTS ix_threat_assessments_framework ON threat_assessments (framework)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS ix_threat_assessments_risk_type ON threat_assessments (risk_type)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS ix_threat_assessments_status ON threat_assessments (status)"))
+            
+            # Update existing records with risk counts
+            db.execute(text("""
+                UPDATE threat_assessments 
+                SET 
+                    critical_count = (LENGTH(UPPER(assessment_report)) - LENGTH(REPLACE(UPPER(assessment_report), 'CRITICAL', ''))) / LENGTH('CRITICAL'),
+                    high_count = (LENGTH(UPPER(assessment_report)) - LENGTH(REPLACE(UPPER(assessment_report), 'HIGH', ''))) / LENGTH('HIGH'),
+                    medium_count = (LENGTH(UPPER(assessment_report)) - LENGTH(REPLACE(UPPER(assessment_report), 'MEDIUM', ''))) / LENGTH('MEDIUM')
+                WHERE assessment_report IS NOT NULL
+            """))
+            
+            db.commit()
+            print("✅ Performance optimization migration applied!")
         else:
-            print("✅ Migration already applied")
+            print("✅ All migrations already applied")
+            
     except Exception as e:
-        print(f"Migration check: {e}")
+        print(f"⚠️ Migration error: {e}")
         db.rollback()
     finally:
         db.close()
@@ -51,7 +87,7 @@ def apply_project_number_migration():
 # Initialize database tables and seed data on startup
 try:
     init_db()
-    apply_project_number_migration()
+    apply_migrations()
     
     # Seed initial admin user if database is empty
     db = SessionLocal()
