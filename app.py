@@ -2089,7 +2089,29 @@ def render_past_assessments(db: Session, user: User):
     
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # Filters - Initialize session state to prevent state conflicts
+    # Cache filter options to avoid querying on every rerun
+    @st.cache_data(ttl=300)  # Cache for 5 minutes
+    def get_filter_options(user_id):
+        """Get unique values for filter dropdowns"""
+        from sqlalchemy import distinct
+        
+        frameworks_query = db.query(distinct(ThreatAssessment.framework)).filter(
+            ThreatAssessment.user_id == user_id,
+            ThreatAssessment.framework.isnot(None)
+        ).order_by(ThreatAssessment.framework).all()
+        frameworks = [f[0] for f in frameworks_query]
+        
+        risk_types_query = db.query(distinct(ThreatAssessment.risk_type)).filter(
+            ThreatAssessment.user_id == user_id,
+            ThreatAssessment.risk_type.isnot(None)
+        ).order_by(ThreatAssessment.risk_type).all()
+        risk_types = [r[0] for r in risk_types_query]
+        
+        return frameworks, risk_types
+    
+    frameworks, risk_types = get_filter_options(user.id)
+    
+    # Filters - Initialize defaults only
     if "framework_filter" not in st.session_state:
         st.session_state.framework_filter = "All"
     if "risk_filter" not in st.session_state:
@@ -2103,32 +2125,20 @@ def render_past_assessments(db: Session, user: User):
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        # Get unique frameworks using database query
-        frameworks_query = db.query(distinct(ThreatAssessment.framework)).filter(
-            ThreatAssessment.user_id == user.id,
-            ThreatAssessment.framework.isnot(None)
-        ).order_by(ThreatAssessment.framework).all()
-        frameworks = [f[0] for f in frameworks_query]
         framework_options = ["All"] + frameworks
-        framework_filter = st.selectbox("Framework", framework_options, index=0, key="framework_filter")
+        framework_filter = st.selectbox("Framework", framework_options, index=framework_options.index(st.session_state.framework_filter) if st.session_state.framework_filter in framework_options else 0, key="framework_filter")
     
     with col2:
-        # Get unique risk types using database query
-        risk_types_query = db.query(distinct(ThreatAssessment.risk_type)).filter(
-            ThreatAssessment.user_id == user.id,
-            ThreatAssessment.risk_type.isnot(None)
-        ).order_by(ThreatAssessment.risk_type).all()
-        risk_types = [r[0] for r in risk_types_query]
         risk_options = ["All"] + risk_types
-        risk_filter = st.selectbox("Risk Type", risk_options, index=0, key="risk_filter")
+        risk_filter = st.selectbox("Risk Type", risk_options, index=risk_options.index(st.session_state.risk_filter) if st.session_state.risk_filter in risk_options else 0, key="risk_filter")
     
     with col3:
-        # Status filter
-        status_filter = st.selectbox("Status", ["All", "completed", "draft", "in_progress"], index=0, key="status_filter")
+        status_options = ["All", "completed", "draft", "in_progress"]
+        status_filter = st.selectbox("Status", status_options, index=status_options.index(st.session_state.status_filter) if st.session_state.status_filter in status_options else 0, key="status_filter")
     
     with col4:
-        # Date range
-        date_filter = st.selectbox("Date Range", ["All Time", "Last 7 Days", "Last 30 Days", "Last 90 Days"], index=0, key="date_filter")
+        date_options = ["All Time", "Last 7 Days", "Last 30 Days", "Last 90 Days"]
+        date_filter = st.selectbox("Date Range", date_options, index=date_options.index(st.session_state.date_filter) if st.session_state.date_filter in date_options else 0, key="date_filter")
     
     # Build query with filters at database level
     query = db.query(ThreatAssessment).filter(ThreatAssessment.user_id == user.id)
