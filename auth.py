@@ -28,6 +28,32 @@ from sqlalchemy.orm import Session
 from models import User, Organization, AuditLog
 import jwt
 import hashlib
+import bcrypt
+import os
+
+
+# ===== PASSWORD HASHING =====
+
+def get_password_hash(password: str) -> str:
+    """Hash a password using bcrypt"""
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify a password against its hash"""
+    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+
+def create_access_token(data: dict, expires_delta: timedelta = None):
+    """Create JWT access token"""
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(hours=24)
+    
+    to_encode.update({"exp": expire})
+    SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here-change-in-production")
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm="HS256")
+    return encoded_jwt
 
 
 class SAMLAuthHandler:

@@ -11,7 +11,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy.orm import Session
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from pydantic import BaseModel, Field, validator
 from datetime import datetime, timedelta
 import anthropic
@@ -24,6 +24,7 @@ from models import (
 )
 from database import get_db, engine
 from auth import SessionManager, SAMLAuthHandler, InputValidator, get_password_hash, verify_password, create_access_token
+from threat_frameworks import FRAMEWORKS, RISK_AREAS, build_comprehensive_prompt
 
 # OAuth2 scheme for token-based auth
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -65,10 +66,10 @@ async def add_security_headers(request: Request, call_next):
     return response
 
 # CORS middleware - Configure allowed origins from environment
-allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8501")
+allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:3001,http://localhost:8501")
 # For development, allow all origins if explicitly set
 if os.getenv("ENVIRONMENT", "development").lower() == "development":
-    allowed_origins = ["*"]
+    allowed_origins = ["http://localhost:3000", "http://localhost:3001", "http://localhost:8501", "http://127.0.0.1:3000", "http://127.0.0.1:3001", "http://127.0.0.1:8501"]
 else:
     allowed_origins = allowed_origins_str.split(",")
     if "*" in allowed_origins:
@@ -91,16 +92,35 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 # Pydantic models for API requests/responses
 class ThreatModelingRequest(BaseModel):
     project_name: str = Field(..., description="Name of the project", min_length=1, max_length=255)
-    system_description: str = Field(..., description="Description of the system to analyze", min_length=10, max_length=50000)
-    framework: str = Field(..., description="Threat modeling framework (STRIDE, MITRE ATT&CK, PASTA, etc.)")
+    project_number: Optional[str] = Field(None, description="Project number/ID", max_length=100)
+    system_description: Optional[str] = Field(None, description="Description of the system to analyze", max_length=50000)
+    framework: Optional[Union[str, List[str]]] = Field(None, description="Threat modeling framework(s) - can be single or multiple")
+    frameworks: Optional[List[str]] = Field(None, description="List of threat modeling frameworks (STRIDE, MITRE ATT&CK, PASTA, etc.)")
     risk_type: Optional[str] = Field(None, description="Type of risk assessment (Agentic AI, Model Risk, etc.)", max_length=100)
     company_name: Optional[str] = Field(None, description="Company name for report branding", max_length=255)
     additional_context: Optional[Dict[str, Any]] = Field(None, description="Additional context for analysis")
     
-    @validator('project_name', 'system_description', 'framework')
+    # New fields for comprehensive threat modeling
+    business_criticality: Optional[str] = Field(None, description="Business criticality level")
+    application_type: Optional[str] = Field(None, description="Type of application")
+    deployment_model: Optional[str] = Field(None, description="Deployment model")
+    environment: Optional[str] = Field(None, description="Environment (Production, Development, etc.)")
+    compliance_requirements: Optional[List[str]] = Field(None, description="Compliance requirements")
+    risk_focus_areas: Optional[List[str]] = Field(None, description="Risk focus areas")
+    documents: Optional[List[Dict[str, Any]]] = Field(None, description="Uploaded documents")
+    anthropic_api_key: Optional[str] = Field(None, description="SecureAI API key for threat assessment generation")
+    
+    @validator('project_name', 'framework')
     def sanitize_text_fields(cls, v):
         """Sanitize text inputs"""
         return InputValidator.sanitize_text(v, max_length=50000)
+    
+    @validator('system_description')
+    def sanitize_system_description(cls, v):
+        """Sanitize system description if provided"""
+        if v:
+            return InputValidator.sanitize_text(v, max_length=50000)
+        return v
 
 
 class ThreatModelingResponse(BaseModel):
@@ -406,7 +426,7 @@ async def read_users_me(current_user: User = Depends(get_current_user_from_token
 async def create_threat_assessment(
     request: Request,
     threat_request: ThreatModelingRequest,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_from_token),
     db: Session = Depends(get_db)
 ):
     """Create a new threat assessment using AI (rate limited to 10/minute)"""
@@ -421,225 +441,107 @@ async def create_threat_assessment(
             )
         
         # Get API key from request or environment
-        anthropic_api_key = threat_request.anthropic_api_key if hasattr(threat_request, 'anthropic_api_key') else os.getenv("ANTHROPIC_API_KEY")
-        if not anthropic_api_key or anthropic_api_key.startswith("sk-ant-api03-CHANGE"):
+        anthropic_api_key = threat_request.anthropic_api_key or os.getenv("ANTHROPIC_API_KEY")
+        
+        if not anthropic_api_key:
             raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="SecureAI API key is missing or invalid"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="SecureAI API key is required. Please add it in Settings."
             )
         
-        client = anthropic.Anthropic(api_key=anthropic_api_key)
+        # Validate API key format
+        if not anthropic_api_key.startswith("sk-ant-api"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid API key format. Please get a valid key from console.anthropic.com/settings/keys"
+            )
         
-        # Build comprehensive project info
+        # Initialize Anthropic client
+        try:
+            client = anthropic.Anthropic(api_key=anthropic_api_key)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Failed to initialize AI client: {str(e)}"
+            )
+        
+        # Build project info
+        # Handle both single framework and multi-framework selection
+        frameworks = []
+        if threat_request.frameworks:
+            frameworks = threat_request.frameworks
+        elif threat_request.framework:
+            if isinstance(threat_request.framework, list):
+                frameworks = threat_request.framework
+            else:
+                frameworks = [threat_request.framework]
+        else:
+            frameworks = ['MITRE ATT&CK']  # Default
+        
+        business_criticality = threat_request.business_criticality or 'High'
+        application_type = threat_request.application_type or 'Web Application'
+        deployment_model = threat_request.deployment_model or 'Cloud'
+        environment = threat_request.environment or 'Production'
+        compliance_requirements = threat_request.compliance_requirements or []
+        risk_focus_areas = threat_request.risk_focus_areas or ['Infrastructure Risk', 'Data Security Risk']
+        
+        # Build system description from documents - EXACT format from original app.py
+        documents_content = ""
+        if threat_request.documents:
+            for doc in threat_request.documents:
+                doc_name = doc.get('name', 'Untitled Document')
+                doc_content = doc.get('content', '')
+                # EXACT formatting from app.py: ### {file.name}\n{content}
+                documents_content += f"\n\n### {doc_name}\n{doc_content}"
+        
+        if not documents_content:
+            documents_content = threat_request.system_description or "No system description provided. This is a preliminary threat assessment based on the project information provided."
+        
+        # Build project info dict for prompt
         project_info = {
             'name': threat_request.project_name,
-            'number': getattr(threat_request, 'project_number', 'N/A'),
-            'app_type': getattr(threat_request, 'application_type', 'Web Application'),
-            'deployment': getattr(threat_request, 'deployment_model', 'Cloud'),
-            'criticality': getattr(threat_request, 'business_criticality', 'High'),
-            'compliance': getattr(threat_request, 'compliance_requirements', []),
-            'environment': getattr(threat_request, 'environment', 'Production')
+            'number': threat_request.project_number or 'N/A',
+            'app_type': application_type,
+            'deployment': deployment_model,
+            'criticality': business_criticality,
+            'compliance': compliance_requirements,
+            'environment': environment
         }
         
-        # Get documents content
-        documents_content = getattr(threat_request, 'system_description', 'No documentation provided')
-        framework = threat_request.framework or 'MITRE ATT&CK'
-        risk_areas = getattr(threat_request, 'risk_focus_areas', ['Infrastructure Risk', 'Data Security Risk'])
+        # Get current date for assessment
+        assessment_date = datetime.utcnow().strftime('%B %d, %Y at %I:%M %p UTC')
         
-        # Build comprehensive evidence-based prompt
-        prompt = f"""You are an expert cybersecurity consultant specializing in threat modeling and risk assessment. 
-Perform a comprehensive threat assessment for the following project using the {framework} framework.
-
-**PROJECT INFORMATION:**
-- Project Name: {project_info['name']}
-- Application Type: {project_info['app_type']}
-- Deployment Model: {project_info['deployment']}
-- Business Criticality: {project_info['criticality']}
-- Compliance Requirements: {', '.join(project_info['compliance'])}
-- Environment: {project_info['environment']}
-
-**UPLOADED DOCUMENTATION:**
-{documents_content}
-
-**THREAT MODELING FRAMEWORK:** {framework}
-
-**SPECIFIC RISK FOCUS AREAS TO ASSESS:**
-{chr(10).join([f"- {area}" for area in risk_areas])}
-
-**ASSESSMENT REQUIREMENTS - EVIDENCE-BASED ANALYSIS:**
-
-Generate a professional threat assessment report with complete structure, extensive tables, and color-coded risk levels suitable for executive review.
-
-**CRITICAL REQUIREMENT: Every finding, recommendation, and observation MUST include:**
-1. **Document Reference:** Which uploaded document this observation is from
-2. **Evidence Citation:** Specific quote or observation from the document
-3. **Line Context:** Approximate location/section in the document
-4. **Analysis:** How this evidence leads to the threat assessment finding
-5. **Concrete Examples:** Specific examples from the documentation demonstrating the issue/risk
-
-# EXECUTIVE SUMMARY
-
-**Overall Risk Rating:** [CRITICAL/HIGH/MEDIUM/LOW]
-
-[One paragraph describing assessment scope, methodology, and documents reviewed]
-
-## Top 5 Critical Findings (with Document Evidence & Examples)
-
-| Finding | Evidence Source (Doc) | Example from Docs | Risk Level | Business Impact | Timeline |
-|---------|----------------------|-------------------|-----------|-----------------|----------|
-| [Finding 1 with doc ref] | [Document: Name/Section] | [Specific example from doc] | CRITICAL | [Impact description] | Immediate (0-30 days) |
-
-## Key Recommendations Summary
-
-| Priority | Count | Sample Actions |
-|----------|-------|----------------|
-| P0 - CRITICAL | [count] | Immediate mitigations for critical risks |
-| P1 - HIGH | [count] | High-priority security improvements |
-| P2 - MEDIUM | [count] | Medium-term strengthening measures |
-
----
-
-# THREAT MODELING ANALYSIS - {framework}
-
-**Summary:** [2-3 sentence overview of the threat modeling analysis]
-
-Comprehensive threat analysis organized by {framework} categories with risk scoring and mitigation paths, **with evidence citations and concrete examples from uploaded documentation**.
-
-For each relevant category in {framework}, provide detailed analysis:
-
-## [Category Name]
-
-**Summary:** [1-2 sentences describing the threats found in this category]
-
-| Threat ID | Threat Description | Document Evidence | Example from Documentation | Likelihood | Impact | Risk Score | Recommended Mitigation |
-|-----------|-------------------|-------------------|---------------------------|-----------|--------|-----------|----------------------|
-| T001 | [threat description] | [Doc: Name, Section/Quote] | [Specific example from doc] | [1-5] | [1-5] | [score] | [mitigation] |
-
----
-
-# SPECIALIZED RISK ASSESSMENTS
-
-**Summary:** [2-3 sentences describing the selected risk focus areas]
-
-{chr(10).join([f'''## {area}
-
-**Summary:** [1-2 sentences describing the risk landscape for {area}]
-
-| Threat ID | Evidence Source (Doc) | Example from Docs | Threat | Likelihood | Impact | Risk Priority | Mitigation Strategy |
-|-----------|-----------------------|-------------------|--------|-----------|--------|---------------|---------------------|
-| T-{area[:3].upper()}-001 | [Doc: Section] | [Specific example] | [specific threat] | [1-5] | [1-5] | P0/P1/P2 | [specific action] |
-''' for area in risk_areas])}
-
----
-
-# COMPONENT-SPECIFIC THREAT ANALYSIS
-
-**Summary:** [2-3 sentences describing the system architecture components]
-
-| Component | Document Evidence | Example from Docs | Critical Threats | Risk Level | Mitigation Approach |
-|-----------|-------------------|-------------------|-----------------|-----------|---------------------|
-| Frontend/UI | [Doc: Section] | [example from doc] | [threats] | CRITICAL/HIGH | [approach] |
-| Backend/App | [Doc: Section] | [example from doc] | [threats] | CRITICAL/HIGH | [approach] |
-| Database/Data | [Doc: Section] | [example from doc] | [threats] | CRITICAL/HIGH | [approach] |
-
----
-
-# ATTACK SCENARIOS & KILL CHAINS
-
-**Summary:** [2-3 sentences describing the most likely attack scenarios]
-
-## Scenario 1: [Attack Title - Highest Risk Scenario]
-
-**Summary:** [1-2 sentences describing this specific attack scenario]
-
-| Kill Chain Phase | Document Evidence | Example from Docs | Description | Detection Window | Mitigation Strategy |
-|-----------------|-------------------|-------------------|-------------|------------------|---------------------|
-| Reconnaissance | [Doc: Section] | [example from doc] | [phase details] | [detection opportunity] | [mitigation] |
-| Exploitation | [Doc: Section] | [example from doc] | [phase details] | [detection opportunity] | [mitigation] |
-
----
-
-# COMPREHENSIVE RISK MATRIX
-
-**Summary:** [2-3 sentences explaining the risk scoring methodology]
-
-## Risk Score Calculation
-
-| Likelihood (L) | 1 - Rare | 2 - Unlikely | 3 - Possible | 4 - Likely | 5 - Very Likely |
-|---|---|---|---|---|---|
-| **5 - Catastrophic** | 5 | 10 | 15 | 20 | **25-CRITICAL** |
-| **4 - Major** | 4 | 8 | 12 | **16-HIGH** | **20-CRITICAL** |
-| **3 - Moderate** | 3 | 6 | **9-MEDIUM** | **12-HIGH** | **15-HIGH** |
-
-## All Findings Risk Matrix
-
-| Finding ID | Description | Likelihood | Impact | Risk Score | Risk Level | Priority | Owner | Remediation Timeline |
-|----------|-------------|-----------|--------|-----------|-----------|----------|-------|----------------------|
-| F001 | [critical finding] | [1-5] | [1-5] | [score] | **CRITICAL** | P0 | [owner] | 0-30 days |
-
----
-
-# PRIORITIZED RECOMMENDATIONS
-
-**Summary:** [2-3 sentences describing the remediation strategy]
-
-## P0 - CRITICAL (Remediate in 0-30 days)
-
-| Recommendation ID | Description | Document Evidence | Estimated Effort | Estimated Cost | Success Criteria |
-|-------------------|-------------|-------------------|------------------|----------------|------------------|
-| R-P0-001 | [critical action] | [Doc: Section] | [effort] | [cost] | [criteria] |
-
-## P1 - HIGH (Remediate in 30-90 days)
-
-| Recommendation ID | Description | Document Evidence | Estimated Effort | Estimated Cost | Success Criteria |
-|-------------------|-------------|-------------------|------------------|----------------|------------------|
-| R-P1-001 | [high priority action] | [Doc: Section] | [effort] | [cost] | [criteria] |
-
----
-
-# COMPLIANCE ASSESSMENT
-
-**Summary:** [2-3 sentences describing compliance status]
-
-| Requirement | Standard | Current State | Gap | Evidence | Remediation | Priority |
-|------------|----------|---------------|-----|----------|-------------|----------|
-| [requirement] | {', '.join(project_info['compliance'])} | [state] | [gap] | [doc evidence] | [action] | [priority] |
-
----
-
-# IMPLEMENTATION ROADMAP
-
-**Summary:** [2-3 sentences describing the phased implementation approach]
-
-## Phase 1: Immediate Actions (0-30 days)
-- [Action 1 with document reference]
-- [Action 2 with document reference]
-
-## Phase 2: Short-term (30-90 days)
-- [Action 1 with document reference]
-- [Action 2 with document reference]
-
-## Phase 3: Long-term (90+ days)
-- [Action 1 with document reference]
-- [Action 2 with document reference]
-"""
+        # Build comprehensive threat modeling prompt using the original logic
+        prompt = build_comprehensive_prompt(
+            project_info=project_info,
+            documents_content=documents_content,
+            frameworks=frameworks,
+            risk_areas=risk_focus_areas,
+            assessment_date=assessment_date
+        )
         
-        # Call Claude AI with error handling
+        # Call Claude AI
         try:
             message = client.messages.create(
                 model="claude-sonnet-4-20250514",
                 max_tokens=16000,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ]
+                messages=[{"role": "user", "content": prompt}]
             )
             report = message.content[0].text
-        except Exception as ai_error:
-            # Log error but don't expose internal details
-            print(f"AI Service Error: {str(ai_error)}")
+        except anthropic.AuthenticationError as auth_error:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired API key. Please get a new key from console.anthropic.com/settings/keys and update it in Settings."
+            )
+        except anthropic.APIError as api_error:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Unable to generate threat assessment. Please try again later."
+                detail=f"AI service error: {str(api_error)}"
+            )
+        except Exception as ai_error:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Failed to generate assessment: {str(ai_error)}"
             )
         
         # Calculate risk counts from report
@@ -648,15 +550,18 @@ For each relevant category in {framework}, provide detailed analysis:
         high_count = report_upper.count("HIGH")
         medium_count = report_upper.count("MEDIUM")
         
+        # Join frameworks for storage
+        framework_str = " + ".join(frameworks)
+        
         # Create threat assessment record
         assessment = ThreatAssessment(
             organization_id=user.organization_id,
             user_id=user.id,
             project_name=threat_request.project_name,
-            project_number=getattr(threat_request, 'project_number', None),
-            framework=threat_request.framework,
-            risk_type=', '.join(risk_areas[:3]) if risk_areas else None,
-            system_description=documents_content[:500],
+            project_number=threat_request.project_number,
+            framework=framework_str,
+            risk_type=', '.join(risk_focus_areas[:3]) if risk_focus_areas else None,
+            system_description=documents_content[:500] if documents_content else None,
             assessment_report=report,
             report_html=report,
             status="completed",
@@ -664,10 +569,16 @@ For each relevant category in {framework}, provide detailed analysis:
             high_count=high_count,
             medium_count=medium_count,
             report_meta={
-                "framework": framework,
-                "risk_areas": risk_areas,
+                "frameworks": frameworks,
+                "risk_areas": risk_focus_areas,
+                "business_criticality": business_criticality,
+                "application_type": application_type,
+                "deployment_model": deployment_model,
+                "environment": environment,
+                "compliance_requirements": compliance_requirements,
                 "generated_via": "API",
-                "model": "claude-sonnet-4-20250514"
+                "model": "claude-sonnet-4-20250514",
+                "assessment_date": assessment_date
             }
         )
         db.add(assessment)
@@ -683,8 +594,8 @@ For each relevant category in {framework}, provide detailed analysis:
             description=f"Created threat assessment via API: {threat_request.project_name}",
             status="success",
             metadata={
-                "framework": threat_request.framework,
-                "risk_areas": risk_areas
+                "frameworks": frameworks,
+                "risk_areas": risk_focus_areas
             },
             ip_address=request.client.host if request.client else None,
             user_agent=request.headers.get("user-agent")
@@ -729,6 +640,115 @@ For each relevant category in {framework}, provide detailed analysis:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create threat assessment: {str(e)}"
         )
+
+
+@app.get("/reports")
+async def get_reports(
+    user: User = Depends(get_current_user_from_token),
+    db: Session = Depends(get_db)
+):
+    """Get all threat assessments for the current user's organization with grouping by project"""
+    assessments = db.query(ThreatAssessment).filter(
+        ThreatAssessment.organization_id == user.organization_id
+    ).order_by(ThreatAssessment.created_at.desc()).all()
+    
+    # Group by project name and number
+    projects = {}
+    for a in assessments:
+        project_key = f"{a.project_name}_{a.project_number or 'no_number'}"
+        if project_key not in projects:
+            projects[project_key] = {
+                "project_name": a.project_name,
+                "project_number": a.project_number,
+                "versions": []
+            }
+        projects[project_key]["versions"].append({
+            "id": a.id,
+            "project_name": a.project_name,
+            "project_number": a.project_number,
+            "framework": a.framework,
+            "created_at": a.created_at.isoformat(),
+            "status": a.status,
+            "critical_count": a.critical_count or 0,
+            "high_count": a.high_count or 0,
+            "medium_count": a.medium_count or 0,
+            "version": len(projects[project_key]["versions"]) + 1
+        })
+    
+    return {"projects": list(projects.values())}
+
+
+@app.get("/reports/{assessment_id}/pdf")
+async def download_pdf(
+    assessment_id: int,
+    user: User = Depends(get_current_user_from_token),
+    db: Session = Depends(get_db)
+):
+    """Download threat assessment as PDF"""
+    from fastapi.responses import Response
+    from pdf_generator import generate_pdf
+    
+    assessment = db.query(ThreatAssessment).filter(
+        ThreatAssessment.id == assessment_id,
+        ThreatAssessment.organization_id == user.organization_id
+    ).first()
+    
+    if not assessment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Assessment not found"
+        )
+    
+    # Generate PDF
+    frameworks_str = assessment.framework  # Already joined with " + "
+    pdf_bytes = generate_pdf(
+        assessment.assessment_report,
+        assessment.project_name,
+        frameworks_str
+    )
+    
+    # Create filename
+    date_str = assessment.created_at.strftime('%Y%m%d')
+    filename = f"Threat_Assessment_{assessment.project_name.replace(' ', '_')}_{date_str}.pdf"
+    
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+@app.get("/reports/{assessment_id}")
+async def get_report_details(
+    assessment_id: int,
+    user: User = Depends(get_current_user_from_token),
+    db: Session = Depends(get_db)
+):
+    """Get full report details"""
+    assessment = db.query(ThreatAssessment).filter(
+        ThreatAssessment.id == assessment_id,
+        ThreatAssessment.organization_id == user.organization_id
+    ).first()
+    
+    if not assessment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Assessment not found"
+        )
+    
+    return {
+        "id": assessment.id,
+        "project_name": assessment.project_name,
+        "project_number": assessment.project_number,
+        "framework": assessment.framework,
+        "created_at": assessment.created_at.isoformat(),
+        "status": assessment.status,
+        "report": assessment.assessment_report,
+        "critical_count": assessment.critical_count or 0,
+        "high_count": assessment.high_count or 0,
+        "medium_count": assessment.medium_count or 0,
+        "metadata": assessment.report_meta
+    }
 
 
 @app.get("/api/v1/threat-modeling/{assessment_id}", response_model=ThreatModelingResponse)
@@ -1046,6 +1066,305 @@ async def saml_sls(org_slug: str, request: Request, db: Session = Depends(get_db
     resp = RedirectResponse(url=url or frontend_url)
     resp.delete_cookie("access_token")
     return resp
+
+
+# ===== USER MANAGEMENT ENDPOINTS =====
+
+@app.get("/api/users")
+async def get_users(
+    user: User = Depends(get_current_user_from_token),
+    db: Session = Depends(get_db)
+):
+    """Get all users in the organization (admin only)"""
+    if user.role != 'admin':
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    
+    users = db.query(User).filter(
+        User.organization_id == user.organization_id
+    ).all()
+    
+    return {
+        "users": [
+            {
+                "id": u.id,
+                "email": u.email,
+                "username": u.username,
+                "full_name": u.full_name or "",
+                "role": u.role,
+                "is_org_admin": u.is_org_admin,
+                "is_active": u.is_active,
+                "last_login_at": u.last_login.isoformat() if u.last_login else None,
+                "created_at": u.created_at.isoformat()
+            }
+            for u in users
+        ]
+    }
+
+
+@app.patch("/api/users/{user_id}/status")
+async def toggle_user_status(
+    user_id: int,
+    status_update: dict,
+    user: User = Depends(get_current_user_from_token),
+    db: Session = Depends(get_db)
+):
+    """Enable/disable a user (admin only)"""
+    if user.role != 'admin':
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    
+    target_user = db.query(User).filter(
+        User.id == user_id,
+        User.organization_id == user.organization_id
+    ).first()
+    
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    target_user.email_verified = status_update.get('active', True)
+    db.commit()
+    
+    return {"message": "User status updated successfully"}
+
+
+@app.patch("/api/users/{user_id}/password")
+async def reset_user_password(
+    user_id: int,
+    password_data: dict,
+    user: User = Depends(get_current_user_from_token),
+    db: Session = Depends(get_db)
+):
+    """Reset a user's password (admin only)"""
+    if user.role != 'admin':
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    
+    target_user = db.query(User).filter(
+        User.id == user_id,
+        User.organization_id == user.organization_id
+    ).first()
+    
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    new_password = password_data.get('password')
+    if not new_password or len(new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must be at least 8 characters"
+        )
+    
+    target_user.password_hash = get_password_hash(new_password)
+    db.commit()
+    
+    return {"message": "Password reset successfully"}
+
+
+@app.patch("/api/users/{user_id}/role")
+async def change_user_role(
+    user_id: int,
+    role_data: dict,
+    user: User = Depends(get_current_user_from_token),
+    db: Session = Depends(get_db)
+):
+    """Change a user's role (admin only)"""
+    if user.role != 'admin':
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    
+    target_user = db.query(User).filter(
+        User.id == user_id,
+        User.organization_id == user.organization_id
+    ).first()
+    
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    new_role = role_data.get('role')
+    if new_role not in ['user', 'manager', 'admin']:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid role"
+        )
+    
+    target_user.role = new_role
+    target_user.is_org_admin = (new_role == 'admin')
+    db.commit()
+    
+    return {"message": "User role updated successfully"}
+
+
+@app.get("/api/audit-logs")
+async def get_audit_logs(
+    user: User = Depends(get_current_user_from_token),
+    db: Session = Depends(get_db)
+):
+    """Get audit logs for the organization (admin only)"""
+    if user.role != 'admin':
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    
+    logs = db.query(AuditLog).filter(
+        AuditLog.organization_id == user.organization_id
+    ).order_by(AuditLog.created_at.desc()).limit(100).all()
+    
+    return {
+        "logs": [
+            {
+                "id": log.id,
+                "user_id": log.user_id,
+                "action": log.action,
+                "resource_type": log.resource_type,
+                "resource_id": log.resource_id,
+                "details": log.details,
+                "ip_address": log.ip_address,
+                "created_at": log.created_at.isoformat()
+            }
+            for log in logs
+        ]
+    }
+
+
+@app.get("/api/dashboard/stats")
+async def get_dashboard_stats(
+    current_user: User = Depends(get_current_user_from_token),
+    db: Session = Depends(get_db)
+):
+    """Get comprehensive dashboard statistics"""
+    try:
+        # Only admins can view organization-wide stats
+        if current_user.role != "admin":
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        org_id = current_user.organization_id
+        
+        # Get total users count
+        total_users = db.query(User).filter(User.organization_id == org_id).count()
+        active_users = db.query(User).filter(
+            User.organization_id == org_id,
+            User.is_active == True
+        ).count()
+        
+        # Get assessments stats
+        from datetime import timedelta
+        now = datetime.utcnow()
+        thirty_days_ago = now - timedelta(days=30)
+        seven_days_ago = now - timedelta(days=7)
+        
+        total_assessments = db.query(ThreatAssessment).filter(
+            ThreatAssessment.organization_id == org_id
+        ).count()
+        
+        assessments_last_30d = db.query(ThreatAssessment).filter(
+            ThreatAssessment.organization_id == org_id,
+            ThreatAssessment.created_at >= thirty_days_ago
+        ).count()
+        
+        assessments_last_7d = db.query(ThreatAssessment).filter(
+            ThreatAssessment.organization_id == org_id,
+            ThreatAssessment.created_at >= seven_days_ago
+        ).count()
+        
+        # Get framework distribution
+        from sqlalchemy import func
+        framework_stats = db.query(
+            ThreatAssessment.framework,
+            func.count(ThreatAssessment.id).label('count')
+        ).filter(
+            ThreatAssessment.organization_id == org_id
+        ).group_by(ThreatAssessment.framework).all()
+        
+        framework_distribution = {stat[0]: stat[1] for stat in framework_stats}
+        
+        # Get risk type distribution
+        risk_type_stats = db.query(
+            ThreatAssessment.risk_type,
+            func.count(ThreatAssessment.id).label('count')
+        ).filter(
+            ThreatAssessment.organization_id == org_id,
+            ThreatAssessment.risk_type.isnot(None)
+        ).group_by(ThreatAssessment.risk_type).all()
+        
+        risk_area_counts = {stat[0]: stat[1] for stat in risk_type_stats if stat[0]}
+        
+        # Get recent assessments
+        recent_assessments = db.query(ThreatAssessment).filter(
+            ThreatAssessment.organization_id == org_id
+        ).order_by(ThreatAssessment.created_at.desc()).limit(10).all()
+        
+        recent_list = []
+        for assessment in recent_assessments:
+            user = db.query(User).filter(User.id == assessment.user_id).first()
+            recent_list.append({
+                "id": assessment.id,
+                "project_name": assessment.project_name,
+                "framework": assessment.framework,
+                "created_at": assessment.created_at.isoformat(),
+                "user_email": user.email if user else "Unknown"
+            })
+        
+        # Get API key count
+        active_api_keys = db.query(APIKey).filter(
+            APIKey.organization_id == org_id,
+            APIKey.is_active == True
+        ).count()
+        
+        # Get API usage stats (handle if APIUsageLog doesn't exist)
+        try:
+            api_calls_this_month = db.query(APIUsageLog).filter(
+                APIUsageLog.organization_id == org_id,
+                APIUsageLog.timestamp >= thirty_days_ago
+            ).count()
+        except Exception:
+            api_calls_this_month = 0
+        
+        return {
+            "users": {
+                "total": total_users,
+                "active": active_users,
+                "inactive": total_users - active_users
+            },
+            "assessments": {
+                "total": total_assessments,
+                "last_30d": assessments_last_30d,
+                "last_7d": assessments_last_7d
+            },
+            "frameworks": framework_distribution,
+            "risk_areas": risk_area_counts,
+            "recent_assessments": recent_list,
+            "api": {
+                "active_keys": active_api_keys,
+                "calls_this_month": api_calls_this_month
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"Dashboard stats error: {str(e)}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Failed to load dashboard statistics: {str(e)}")
 
 
 if __name__ == "__main__":

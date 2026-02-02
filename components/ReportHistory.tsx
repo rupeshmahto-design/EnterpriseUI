@@ -1,145 +1,37 @@
-import React, { useState, useEffect } from 'react';
-import { AssuranceReport } from '../types';
-import { apiService, SavedReport } from '../services/apiService';
-import { generateRiskControlMatrix } from '../services/excelService';
-// @ts-ignore
-import html2pdf from 'html2pdf.js';
+import React, { useState } from 'react';
 
-interface ReportHistoryProps {
-  onViewReport: (savedReport: SavedReport) => void;
+interface Assessment {
+  id: number;
+  project_name: string;
+  project_number?: string;
+  framework: string;
+  created_at: string;
+  status: string;
+  critical_count: number;
+  high_count: number;
+  medium_count: number;
+  version: number;
 }
 
-const ReportHistory: React.FC<ReportHistoryProps> = ({ onViewReport }) => {
-  const [savedReports, setSavedReports] = useState<SavedReport[]>([]);
-  const [groupedReports, setGroupedReports] = useState<{ [key: string]: SavedReport[] }>({});
+interface Project {
+  project_name: string;
+  project_number?: string;
+  versions: Assessment[];
+}
+
+interface ReportHistoryProps {
+  projects: Project[];
+  onViewReport: (assessmentId: number) => void;
+  onDownloadPdf: (assessmentId: number) => void;
+}
+
+const ReportHistory: React.FC<ReportHistoryProps> = ({ projects, onViewReport, onDownloadPdf }) => {
+  const [groupByProject, setGroupByProject] = useState(true);
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
-  const [exporting, setExporting] = useState<string | null>(null);
-
-  useEffect(() => {
-    loadReports();
-  }, []);
-
-  const loadReports = async () => {
-    try {
-      const reports = await apiService.getReports();
-      setSavedReports(reports);
-      
-      // Group by project number
-      const grouped = reports.reduce((acc, report) => {
-        const key = report.projectNumber || 'No Project Number';
-        if (!acc[key]) {
-          acc[key] = [];
-        }
-        acc[key].push(report);
-        return acc;
-      }, {} as { [key: string]: SavedReport[] });
-      
-      // Sort each group by timestamp (newest first)
-      Object.keys(grouped).forEach(key => {
-        grouped[key].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      });
-      
-      setGroupedReports(grouped);
-    } catch (error) {
-      console.error('Error loading reports:', error);
-    }
-  };
-
-  const toggleProject = (projectNumber: string) => {
-    setExpandedProjects(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(projectNumber)) {
-        newSet.delete(projectNumber);
-      } else {
-        newSet.add(projectNumber);
-      }
-      return newSet;
-    });
-  };
-
-  const deleteReport = async (reportId: string) => {
-    if (confirm('Are you sure you want to delete this report?')) {
-      try {
-        await apiService.deleteReport(reportId);
-        loadReports();
-      } catch (error) {
-        console.error('Error deleting report:', error);
-        alert('Failed to delete report. Please try again.');
-      }
-    }
-  };
-
-  const exportReport = async (savedReport: SavedReport) => {
-    setExporting(savedReport.id);
-    
-    // Create temporary container
-    const container = document.createElement('div');
-    container.style.position = 'absolute';
-    container.style.left = '-9999px';
-    document.body.appendChild(container);
-    
-    // Render appropriate component based on viewMode
-    const elementId = savedReport.viewMode === 'professional' ? 'temp-professional-report' : 'temp-dashboard-report';
-    container.innerHTML = `<div id="${elementId}"></div>`;
-    
-    try {
-      // Import and render appropriate component
-      if (savedReport.viewMode === 'professional') {
-        const { default: ProfessionalReport } = await import('./ProfessionalReport');
-        const React = await import('react');
-        const ReactDOM = await import('react-dom/client');
-        
-        const root = ReactDOM.createRoot(container.querySelector(`#${elementId}`)!);
-        root.render(
-          React.createElement(ProfessionalReport, {
-            report: savedReport.report,
-            projectName: savedReport.projectName,
-            projectNumber: savedReport.projectNumber,
-            projectStage: savedReport.projectStage,
-            documents: savedReport.documents.map(d => ({ name: d.name, category: 'Uploaded' }))
-          })
-        );
-        
-        // Wait for render
-        await new Promise(resolve => setTimeout(resolve, 500));
-      } else {
-        const { default: ReportDashboard } = await import('./ReportDashboard');
-        const React = await import('react');
-        const ReactDOM = await import('react-dom/client');
-        
-        const root = ReactDOM.createRoot(container.querySelector(`#${elementId}`)!);
-        root.render(
-          React.createElement(ReportDashboard, {
-            report: savedReport.report
-          })
-        );
-        
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-      
-      const element = container.querySelector(`#${elementId}`);
-      
-      const opt = {
-        margin: 0,
-        filename: `${savedReport.projectNumber}_${savedReport.projectName}_${new Date(savedReport.created_at).toISOString().split('T')[0]}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, letterRendering: true },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      };
-
-      await html2pdf().set(opt).from(element).save();
-    } catch (error) {
-      console.error('Export failed:', error);
-      alert('Failed to export PDF. Please try viewing the report and using the export button there.');
-    } finally {
-      document.body.removeChild(container);
-      setExporting(null);
-    }
-  };
 
   const formatDate = (timestamp: string) => {
     const date = new Date(timestamp);
-    return date.toLocaleString('en-AU', {
+    return date.toLocaleString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -148,134 +40,230 @@ const ReportHistory: React.FC<ReportHistoryProps> = ({ onViewReport }) => {
     });
   };
 
+  const toggleProject = (projectKey: string) => {
+    const newExpanded = new Set(expandedProjects);
+    if (newExpanded.has(projectKey)) {
+      newExpanded.delete(projectKey);
+    } else {
+      newExpanded.add(projectKey);
+    }
+    setExpandedProjects(newExpanded);
+  };
+
+  // Flatten all assessments for list view
+  const allAssessments: Assessment[] = projects.flatMap(p => p.versions);
+
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
-      <div className="text-center space-y-4">
-        <h2 className="text-5xl font-black text-slate-900 tracking-tight">Report History</h2>
-        <p className="text-slate-400 font-medium max-w-xl mx-auto text-lg leading-relaxed">
-          View and manage your previously generated project assurance reports
-        </p>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-bold text-slate-900 mb-2">📚 Past Assessments</h2>
+          <p className="text-slate-600">View and download your threat assessment reports</p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setGroupByProject(!groupByProject)}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              groupByProject
+                ? 'bg-blue-600 text-white'
+                : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+            }`}
+          >
+            <i className="fas fa-layer-group mr-2"></i>
+            {groupByProject ? 'Grouped by Project' : 'List View'}
+          </button>
+        </div>
       </div>
 
-      {Object.keys(groupedReports).length === 0 ? (
-        <div className="bg-white rounded-[2rem] border border-slate-200 p-16 text-center">
-          <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <i className="fa-solid fa-folder-open text-4xl text-slate-300"></i>
+      {allAssessments.length === 0 ? (
+        <div className="bg-white rounded-xl border border-slate-200 p-16 text-center">
+          <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <i className="fas fa-folder-open text-3xl text-slate-300"></i>
           </div>
-          <h3 className="text-2xl font-black text-slate-900 mb-3">No Reports Yet</h3>
-          <p className="text-slate-400 font-medium max-w-md mx-auto">
-            Generate your first project assurance report to see it here
-          </p>
+          <h3 className="text-xl font-bold text-slate-900 mb-2">No Reports Yet</h3>
+          <p className="text-slate-600">🔍 No past assessments yet. Create your first threat assessment!</p>
         </div>
-      ) : (
+      ) : groupByProject ? (
         <div className="space-y-6">
-          {Object.keys(groupedReports).map(projectNumber => (
-            <div key={projectNumber} className="bg-white rounded-[2rem] border border-slate-200 overflow-hidden shadow-sm">
-              <button
-                onClick={() => toggleProject(projectNumber)}
-                className="w-full px-10 py-6 flex items-center justify-between hover:bg-slate-50 transition-all"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center">
-                    <i className="fa-solid fa-folder text-indigo-600 text-xl"></i>
-                  </div>
-                  <div className="text-left">
-                    <h3 className="text-xl font-black text-slate-900">{projectNumber}</h3>
-                    <p className="text-sm text-slate-400 font-medium">
-                      {groupedReports[projectNumber].length} report{groupedReports[projectNumber].length !== 1 ? 's' : ''}
-                    </p>
-                  </div>
-                </div>
-                <i className={`fa-solid fa-chevron-${expandedProjects.has(projectNumber) ? 'up' : 'down'} text-slate-400`}></i>
-              </button>
+          {projects.map((project, idx) => {
+            const projectKey = `${project.project_name}_${project.project_number || idx}`;
+            const isExpanded = expandedProjects.has(projectKey);
+            const latestVersion = project.versions[0];
 
-              {expandedProjects.has(projectNumber) && (
-                <div className="border-t border-slate-200 p-6 space-y-4 bg-slate-50">
-                  {groupedReports[projectNumber].map(savedReport => (
-                    <div
-                      key={savedReport.id}
-                      className="bg-white rounded-2xl border border-slate-200 p-6 hover:shadow-md transition-all"
-                    >
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex-1">
-                          <h4 className="text-lg font-bold text-slate-900 mb-2">
-                            {savedReport.projectName}
-                          </h4>
-                          <div className="flex items-center gap-4 text-sm text-slate-500 font-medium">
-                            <span className="flex items-center gap-2">
-                              <i className="fa-solid fa-calendar text-slate-400"></i>
-                              {formatDate(savedReport.created_at)}
-                            </span>
-                            <span className="flex items-center gap-2">
-                              <i className="fa-solid fa-layer-group text-slate-400"></i>
-                              {savedReport.projectStage}
-                            </span>
-                            <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-black uppercase">
-                              {savedReport.viewMode === 'professional' ? 'Professional' : 'Dashboard'}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => onViewReport(savedReport)}
-                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2"
-                          >
-                            <i className="fa-solid fa-eye"></i>
-                            View
-                          </button>
-                          <button
-                            onClick={() => exportReport(savedReport)}
-                            disabled={exporting === savedReport.id}
-                            className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {exporting === savedReport.id ? (
-                              <>
-                                <i className="fa-solid fa-spinner fa-spin"></i>
-                                Exporting...
-                              </>
-                            ) : (
-                              <>
-                                <i className="fa-solid fa-download"></i>
-                                Export PDF
-                              </>
-                            )}
-                          </button>
-                          <button
-                            onClick={() => generateRiskControlMatrix(savedReport.report, savedReport.projectName, savedReport.projectNumber)}
-                            className="px-4 py-2 bg-green-50 hover:bg-green-100 text-green-600 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2"
-                            title="Export Risk & Control Matrix to Excel"
-                          >
-                            <i className="fa-solid fa-file-excel"></i>
-                            Risk Matrix
-                          </button>
-                          <button
-                            onClick={() => deleteReport(savedReport.id)}
-                            className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-xs font-black uppercase tracking-wider transition-all"
-                          >
-                            <i className="fa-solid fa-trash"></i>
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap gap-2">
-                        {savedReport.documents.slice(0, 3).map((doc, idx) => (
-                          <span
-                            key={idx}
-                            className="px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-semibold"
-                          >
-                            {doc.name}
-                          </span>
-                        ))}
-                        {savedReport.documents.length > 3 && (
-                          <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-semibold">
-                            +{savedReport.documents.length - 3} more
+            return (
+              <div key={projectKey} className="bg-white rounded-xl border-2 border-slate-200 overflow-hidden">
+                {/* Project Header */}
+                <div
+                  className="p-6 bg-gradient-to-r from-slate-50 to-white cursor-pointer hover:bg-slate-50 transition-colors"
+                  onClick={() => toggleProject(projectKey)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="text-xl font-bold text-slate-900">
+                          🔍 {project.project_name}
+                        </h3>
+                        {project.project_number && (
+                          <span className="px-3 py-1 bg-blue-100 text-blue-700 text-sm font-semibold rounded-lg">
+                            #{project.project_number}
                           </span>
                         )}
+                        <span className="px-3 py-1 bg-purple-100 text-purple-700 text-sm font-semibold rounded-lg">
+                          {project.versions.length} version{project.versions.length !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4 text-sm text-slate-600">
+                        <span><i className="fas fa-shield-alt mr-1"></i> {latestVersion.framework}</span>
+                        <span><i className="fas fa-clock mr-1"></i> Latest: {formatDate(latestVersion.created_at)}</span>
                       </div>
                     </div>
-                  ))}
+                    <button className="text-slate-400 hover:text-slate-600 transition-colors">
+                      <i className={`fas fa-chevron-${isExpanded ? 'up' : 'down'} text-xl`}></i>
+                    </button>
+                  </div>
+
+                  {/* Risk Summary */}
+                  <div className="flex gap-3 mt-4">
+                    <div className="flex-1 bg-gradient-to-br from-red-50 to-red-100 rounded-lg p-3 border border-red-200">
+                      <p className="text-red-700 text-xs font-bold uppercase">🔴 Critical</p>
+                      <p className="text-red-900 text-2xl font-extrabold mt-1">{latestVersion.critical_count}</p>
+                    </div>
+                    <div className="flex-1 bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-3 border border-orange-200">
+                      <p className="text-orange-700 text-xs font-bold uppercase">🟠 High</p>
+                      <p className="text-orange-900 text-2xl font-extrabold mt-1">{latestVersion.high_count}</p>
+                    </div>
+                    <div className="flex-1 bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg p-3 border border-yellow-200">
+                      <p className="text-yellow-700 text-xs font-bold uppercase">🟡 Medium</p>
+                      <p className="text-yellow-900 text-2xl font-extrabold mt-1">{latestVersion.medium_count}</p>
+                    </div>
+                  </div>
                 </div>
-              )}
+
+                {/* Versions List */}
+                {isExpanded && (
+                  <div className="p-6 bg-slate-50 border-t border-slate-200">
+                    <h4 className="text-sm font-bold text-slate-700 uppercase mb-4">Version History</h4>
+                    <div className="space-y-3">
+                      {project.versions.map((assessment) => (
+                        <div
+                          key={assessment.id}
+                          className="bg-white rounded-lg p-4 border border-slate-200"
+                        >
+                          <div className="flex items-center justify-between mb-3">
+                            <div>
+                              <span className="px-2 py-1 bg-blue-600 text-white text-xs font-bold rounded">
+                                v{assessment.version}
+                              </span>
+                              <span className="ml-3 text-sm text-slate-600">
+                                {formatDate(assessment.created_at)}
+                              </span>
+                            </div>
+                            <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-lg uppercase">
+                              {assessment.status}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <div className="flex gap-4 text-sm">
+                              <span className="text-red-600 font-semibold">
+                                🔴 {assessment.critical_count}
+                              </span>
+                              <span className="text-orange-600 font-semibold">
+                                🟠 {assessment.high_count}
+                              </span>
+                              <span className="text-yellow-600 font-semibold">
+                                🟡 {assessment.medium_count}
+                              </span>
+                            </div>
+
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => onDownloadPdf(assessment.id)}
+                                className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors"
+                              >
+                                <i className="fas fa-file-pdf mr-1"></i> PDF
+                              </button>
+                              <button
+                                onClick={() => onViewReport(assessment.id)}
+                                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                              >
+                                <i className="fas fa-eye mr-1"></i> View
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {allAssessments.map((assessment) => (
+            <div key={assessment.id} className="bg-white rounded-xl border-2 border-slate-200 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900">
+                    🔍 {assessment.project_name}
+                  </h3>
+                  {assessment.project_number && (
+                    <p className="text-sm text-slate-500 font-medium">
+                      #{assessment.project_number}
+                    </p>
+                  )}
+                </div>
+                <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-lg uppercase">
+                  {assessment.status}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <div>
+                  <p className="text-slate-500 text-xs font-semibold uppercase">Date</p>
+                  <p className="text-slate-900 font-semibold">{formatDate(assessment.created_at)}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs font-semibold uppercase">Framework</p>
+                  <p className="text-slate-900 font-semibold">{assessment.framework}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs font-semibold uppercase">Version</p>
+                  <p className="text-slate-900 font-semibold">v{assessment.version}</p>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mb-4">
+                <div className="flex-1 bg-gradient-to-br from-red-50 to-red-100 rounded-lg p-3 border border-red-200">
+                  <p className="text-red-700 text-xs font-bold uppercase">🔴 Critical</p>
+                  <p className="text-red-900 text-2xl font-extrabold mt-1">{assessment.critical_count}</p>
+                </div>
+                <div className="flex-1 bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-3 border border-orange-200">
+                  <p className="text-orange-700 text-xs font-bold uppercase">🟠 High</p>
+                  <p className="text-orange-900 text-2xl font-extrabold mt-1">{assessment.high_count}</p>
+                </div>
+                <div className="flex-1 bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg p-3 border border-yellow-200">
+                  <p className="text-yellow-700 text-xs font-bold uppercase">🟡 Medium</p>
+                  <p className="text-yellow-900 text-2xl font-extrabold mt-1">{assessment.medium_count}</p>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => onDownloadPdf(assessment.id)}
+                  className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+                >
+                  <i className="fas fa-file-pdf mr-2"></i> Download PDF
+                </button>
+                <button
+                  onClick={() => onViewReport(assessment.id)}
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                >
+                  <i className="fas fa-eye mr-2"></i> View Full Report
+                </button>
+              </div>
             </div>
           ))}
         </div>

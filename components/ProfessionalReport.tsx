@@ -88,10 +88,10 @@ const ProfessionalReport: React.FC<ProfessionalReportProps> = ({
           borderTop: '1px solid rgba(255,255,255,0.3)'
         }}>
           <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '10px' }}>
-            AssurePro AI
+            SecureAI
           </div>
           <div style={{ fontSize: '14px', opacity: 0.8 }}>
-            AI-Generated Project Assurance Report | Enterprise Governance Platform
+            AI-Generated Threat Assessment Report | Threat Modeling Platform
           </div>
         </div>
       </div>
@@ -610,7 +610,7 @@ const ProfessionalReport: React.FC<ProfessionalReportProps> = ({
         borderTop: '2px solid #e5e7eb'
       }}>
         <p style={{ marginBottom: '5px', fontWeight: '600' }}>
-          <strong>AssurePro AI</strong> | Enterprise Project Assurance Platform
+          <strong>SecureAI</strong> | Threat Assessment Platform
         </p>
         <p>AI-Generated Report | {reportTimestamp} | Confidential & Proprietary</p>
       </div>

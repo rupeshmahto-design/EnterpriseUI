@@ -42,13 +42,8 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
     setLoading(true);
 
     try {
-      await register({
-        email: formData.email,
-        password: formData.password,
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        organizationName: formData.organizationName
-      });
+      const fullName = `${formData.firstName} ${formData.lastName}`;
+      await register(formData.email, formData.password, fullName);
     } catch (err: any) {
       setError(err.message || 'Registration failed');
     } finally {
@@ -60,7 +55,7 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 px-4">
       <div className="max-w-md w-full bg-white rounded-lg shadow-xl p-8">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">AssurePro AI</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Threat Modeling AI</h1>
           <p className="text-gray-600 mt-2">Create your account</p>
         </div>
 

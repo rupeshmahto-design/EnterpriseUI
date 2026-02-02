@@ -15,6 +15,15 @@ export const FRAMEWORKS = [
   'Custom Client Framework'
 ];
 
+export const FRAMEWORK_DESCRIPTIONS: Record<string, string> = {
+  'MITRE ATT&CK': 'Adversarial tactics, techniques, and common knowledge - maps real-world threat actor behaviors',
+  'STRIDE': 'Spoofing, Tampering, Repudiation, Information Disclosure, Denial of Service, Elevation of Privilege',
+  'PASTA': 'Process for Attack Simulation and Threat Analysis - risk-centric methodology',
+  'OCTAVE': 'Operationally Critical Threat, Asset, and Vulnerability Evaluation - organizational risk assessment',
+  'VAST': 'Visual, Agile, and Simple Threat modeling - scalable for DevOps and agile environments',
+  'Custom Client Framework': 'Organization-specific threat modeling framework tailored to your requirements'
+};
+
 export const BUSINESS_CRITICALITY = [
   'Critical',
   'High',
@@ -62,6 +71,17 @@ export const RISK_FOCUS_AREAS = [
   'Identity & Access Risk'
 ];
 
+export const RISK_AREA_DESCRIPTIONS: Record<string, string> = {
+  'Agentic AI Risk': 'Autonomous agent behavior, decision-making, prompt injection, and agent orchestration vulnerabilities',
+  'Model Risk': 'AI model security including adversarial attacks, model poisoning, and inference manipulation',
+  'Data Security Risk': 'Data breaches, unauthorized access, data exfiltration, and sensitive information exposure',
+  'Infrastructure Risk': 'Cloud/on-prem infrastructure vulnerabilities, misconfigurations, and deployment security',
+  'Compliance Risk': 'Regulatory compliance gaps (GDPR, HIPAA, SOC2) and audit requirements',
+  'Privacy Risk': 'PII handling, user consent, data retention, and privacy law violations',
+  'Supply Chain Risk': 'Third-party dependencies, vendor security, open-source vulnerabilities, and supply chain attacks',
+  'Identity & Access Risk': 'Authentication weaknesses, authorization flaws, privilege escalation, and access control issues'
+};
+
 export const COMPLIANCE_REQUIREMENTS = [
   'SOC 2',
   'ISO 27001',
@@ -70,8 +90,7 @@ export const COMPLIANCE_REQUIREMENTS = [
   'PCI DSS',
   'NIST',
   'CIS Controls',
-  'CCPA',
-  'None'
+  'CCPA'
 ];
 
 export const DOCUMENT_CATEGORIES = [

@@ -1,18 +1,33 @@
 
 import React from 'react';
-import { AssuranceReport } from '../types';
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
 
 interface ReportDashboardProps {
-  report: AssuranceReport;
+  report: string;
 }
 
 const ReportDashboard: React.FC<ReportDashboardProps> = ({ report }) => {
-  const COLORS = ['#10b981', '#f59e0b', '#ef4444'];
-  
-  const gapStats = [
-    { name: 'Low', value: report.gapAnalysis.filter(g => g.severity === 'Low').length },
-    { name: 'Medium', value: report.gapAnalysis.filter(g => g.severity === 'Medium').length },
+  return (
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+      <div className="prose prose-sm max-w-none">
+        <div 
+          className="markdown-content"
+          dangerouslySetInnerHTML={{ 
+            __html: report
+              .replace(/\n/g, '<br />')
+              .replace(/#{3} (.*?)(<br \/>|$)/g, '<h3 class="text-lg font-bold mt-6 mb-3 text-gray-800">$1</h3>')
+              .replace(/#{2} (.*?)(<br \/>|$)/g, '<h2 class="text-xl font-bold mt-8 mb-4 text-gray-900">$2</h2>')
+              .replace(/#{1} (.*?)(<br \/>|$)/g, '<h1 class="text-2xl font-bold mt-10 mb-5 text-gray-900">$1</h1>')
+              .replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-gray-900">$1</strong>')
+              .replace(/\*(.*?)\*/g, '<em>$1</em>')
+              .replace(/\|(.*?)\|/g, '<span class="border-r border-gray-300 px-2">$1</span>')
+          }} 
+        />
+      </div>
+    </div>
+  );
+};
+
+export default ReportDashboard;
     { name: 'High', value: report.gapAnalysis.filter(g => g.severity === 'High').length },
   ];
 
