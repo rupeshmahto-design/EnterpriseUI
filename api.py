@@ -4,7 +4,7 @@ FastAPI endpoints with API key authentication
 """
 
 from fastapi import FastAPI, Depends, HTTPException, status, Header, Request, Response
-from fastapi.security import APIKeyHeader
+from fastapi.security import APIKeyHeader, OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, PlainTextResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -13,7 +13,7 @@ from slowapi.errors import RateLimitExceeded
 from sqlalchemy.orm import Session
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field, validator
-from datetime import datetime
+from datetime import datetime, timedelta
 import anthropic
 import os
 import secrets
@@ -23,7 +23,10 @@ from models import (
     ThreatAssessment, UsageStats
 )
 from database import get_db, engine
-from auth import SessionManager, SAMLAuthHandler, InputValidator
+from auth import SessionManager, SAMLAuthHandler, InputValidator, get_password_hash, verify_password, create_access_token
+
+# OAuth2 scheme for token-based auth
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -55,22 +58,29 @@ async def add_security_headers(request: Request, call_next):
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
     
-    # Remove server header
-    response.headers.pop("Server", None)
+    # Remove server header (MutableHeaders doesn't support pop in newer versions)
+    if "Server" in response.headers:
+        del response.headers["Server"]
     
     return response
 
 # CORS middleware - Configure allowed origins from environment
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:8501").split(",")
-if "*" in allowed_origins and os.getenv("ENVIRONMENT", "development").lower() in ["production", "prod"]:
-    raise RuntimeError("CRITICAL: Wildcard CORS (*) not allowed in production!")
+allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8501")
+# For development, allow all origins if explicitly set
+if os.getenv("ENVIRONMENT", "development").lower() == "development":
+    allowed_origins = ["*"]
+else:
+    allowed_origins = allowed_origins_str.split(",")
+    if "*" in allowed_origins:
+        raise RuntimeError("CRITICAL: Wildcard CORS (*) not allowed in production!")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
-    allow_headers=["Content-Type", "Authorization", "X-API-Key"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
     max_age=3600,  # Cache preflight requests for 1 hour
 )
 
@@ -283,13 +293,120 @@ async def health_check(request: Request):
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
 
 
+# ===== AUTHENTICATION ENDPOINTS =====
+
+class UserRegister(BaseModel):
+    email: str
+    password: str
+    full_name: str
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+@app.post("/users/register")
+async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
+    """Register a new user"""
+    # Check if user exists
+    existing_user = db.query(User).filter(User.email == user_data.email).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
+    
+    # Create or get default organization
+    default_org = db.query(Organization).filter(Organization.slug == "default").first()
+    if not default_org:
+        default_org = Organization(
+            name="Default Organization",
+            slug="default",
+            max_users=100,
+            max_api_calls_per_month=10000
+        )
+        db.add(default_org)
+        db.commit()
+        db.refresh(default_org)
+    
+    # Generate username from email
+    username = user_data.email.split('@')[0]
+    # Ensure username is unique
+    counter = 1
+    original_username = username
+    while db.query(User).filter(User.username == username).first():
+        username = f"{original_username}{counter}"
+        counter += 1
+    
+    # Create new user
+    new_user = User(
+        email=user_data.email,
+        username=username,
+        password_hash=get_password_hash(user_data.password),
+        full_name=user_data.full_name,
+        role="user",
+        is_active=True,
+        organization_id=default_org.id
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    return {"message": "User created successfully", "user_id": new_user.id}
+
+@app.post("/token", response_model=Token)
+async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    """Login endpoint to get access token"""
+    user = db.query(User).filter(User.email == form_data.username).first()
+    if not user or not verify_password(form_data.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Create access token
+    access_token = create_access_token(data={"sub": user.email})
+    
+    return {"access_token": access_token, "token_type": "bearer"}
+
+async def get_current_user_from_token(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """Get current user from JWT token"""
+    import jwt
+    from jwt import PyJWTError
+    
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    
+    try:
+        SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here-change-in-production")
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        email: str = payload.get("sub")
+        if email is None:
+            raise credentials_exception
+    except PyJWTError:
+        raise credentials_exception
+    
+    user = db.query(User).filter(User.email == email).first()
+    if user is None:
+        raise credentials_exception
+    
+    return user
+
+@app.get("/users/me", response_model=UserResponse)
+async def read_users_me(current_user: User = Depends(get_current_user_from_token)):
+    """Get current user info"""
+    return current_user
+
+
 @app.post("/api/v1/threat-modeling", response_model=ThreatModelingResponse)
 @limiter.limit("10/minute")  # Limit AI calls to prevent abuse
 async def create_threat_assessment(
     request: Request,
     threat_request: ThreatModelingRequest,
     user: User = Depends(get_current_user),
-    api_key: APIKey = Depends(require_scope("threat_modeling:write")),
     db: Session = Depends(get_db)
 ):
     """Create a new threat assessment using AI (rate limited to 10/minute)"""
@@ -297,45 +414,221 @@ async def create_threat_assessment(
     
     try:
         # Validate inputs
-        if len(threat_request.system_description) < 10:
+        if not threat_request.project_name or len(threat_request.project_name) < 2:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="System description too short (minimum 10 characters)"
+                detail="Project name is required (minimum 2 characters)"
             )
         
-        # Initialize Anthropic client
-        anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
+        # Get API key from request or environment
+        anthropic_api_key = threat_request.anthropic_api_key if hasattr(threat_request, 'anthropic_api_key') else os.getenv("ANTHROPIC_API_KEY")
         if not anthropic_api_key or anthropic_api_key.startswith("sk-ant-api03-CHANGE"):
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="AI service temporarily unavailable"
+                detail="SecureAI API key is missing or invalid"
             )
         
         client = anthropic.Anthropic(api_key=anthropic_api_key)
         
-        # Build prompt for threat modeling
-        prompt = f"""Generate a comprehensive threat model for the following system:
+        # Build comprehensive project info
+        project_info = {
+            'name': threat_request.project_name,
+            'number': getattr(threat_request, 'project_number', 'N/A'),
+            'app_type': getattr(threat_request, 'application_type', 'Web Application'),
+            'deployment': getattr(threat_request, 'deployment_model', 'Cloud'),
+            'criticality': getattr(threat_request, 'business_criticality', 'High'),
+            'compliance': getattr(threat_request, 'compliance_requirements', []),
+            'environment': getattr(threat_request, 'environment', 'Production')
+        }
+        
+        # Get documents content
+        documents_content = getattr(threat_request, 'system_description', 'No documentation provided')
+        framework = threat_request.framework or 'MITRE ATT&CK'
+        risk_areas = getattr(threat_request, 'risk_focus_areas', ['Infrastructure Risk', 'Data Security Risk'])
+        
+        # Build comprehensive evidence-based prompt
+        prompt = f"""You are an expert cybersecurity consultant specializing in threat modeling and risk assessment. 
+Perform a comprehensive threat assessment for the following project using the {framework} framework.
 
-Project: {threat_request.project_name}
-Framework: {threat_request.framework}
-Risk Type: {threat_request.risk_type or 'General'}
+**PROJECT INFORMATION:**
+- Project Name: {project_info['name']}
+- Application Type: {project_info['app_type']}
+- Deployment Model: {project_info['deployment']}
+- Business Criticality: {project_info['criticality']}
+- Compliance Requirements: {', '.join(project_info['compliance'])}
+- Environment: {project_info['environment']}
 
-System Description:
-{threat_request.system_description}
+**UPLOADED DOCUMENTATION:**
+{documents_content}
 
-Please provide:
-1. Identified threats based on {threat_request.framework} framework
-2. Risk assessment and prioritization
-3. Attack scenarios
-4. Mitigation recommendations
-5. Compliance considerations
+**THREAT MODELING FRAMEWORK:** {framework}
+
+**SPECIFIC RISK FOCUS AREAS TO ASSESS:**
+{chr(10).join([f"- {area}" for area in risk_areas])}
+
+**ASSESSMENT REQUIREMENTS - EVIDENCE-BASED ANALYSIS:**
+
+Generate a professional threat assessment report with complete structure, extensive tables, and color-coded risk levels suitable for executive review.
+
+**CRITICAL REQUIREMENT: Every finding, recommendation, and observation MUST include:**
+1. **Document Reference:** Which uploaded document this observation is from
+2. **Evidence Citation:** Specific quote or observation from the document
+3. **Line Context:** Approximate location/section in the document
+4. **Analysis:** How this evidence leads to the threat assessment finding
+5. **Concrete Examples:** Specific examples from the documentation demonstrating the issue/risk
+
+# EXECUTIVE SUMMARY
+
+**Overall Risk Rating:** [CRITICAL/HIGH/MEDIUM/LOW]
+
+[One paragraph describing assessment scope, methodology, and documents reviewed]
+
+## Top 5 Critical Findings (with Document Evidence & Examples)
+
+| Finding | Evidence Source (Doc) | Example from Docs | Risk Level | Business Impact | Timeline |
+|---------|----------------------|-------------------|-----------|-----------------|----------|
+| [Finding 1 with doc ref] | [Document: Name/Section] | [Specific example from doc] | CRITICAL | [Impact description] | Immediate (0-30 days) |
+
+## Key Recommendations Summary
+
+| Priority | Count | Sample Actions |
+|----------|-------|----------------|
+| P0 - CRITICAL | [count] | Immediate mitigations for critical risks |
+| P1 - HIGH | [count] | High-priority security improvements |
+| P2 - MEDIUM | [count] | Medium-term strengthening measures |
+
+---
+
+# THREAT MODELING ANALYSIS - {framework}
+
+**Summary:** [2-3 sentence overview of the threat modeling analysis]
+
+Comprehensive threat analysis organized by {framework} categories with risk scoring and mitigation paths, **with evidence citations and concrete examples from uploaded documentation**.
+
+For each relevant category in {framework}, provide detailed analysis:
+
+## [Category Name]
+
+**Summary:** [1-2 sentences describing the threats found in this category]
+
+| Threat ID | Threat Description | Document Evidence | Example from Documentation | Likelihood | Impact | Risk Score | Recommended Mitigation |
+|-----------|-------------------|-------------------|---------------------------|-----------|--------|-----------|----------------------|
+| T001 | [threat description] | [Doc: Name, Section/Quote] | [Specific example from doc] | [1-5] | [1-5] | [score] | [mitigation] |
+
+---
+
+# SPECIALIZED RISK ASSESSMENTS
+
+**Summary:** [2-3 sentences describing the selected risk focus areas]
+
+{chr(10).join([f'''## {area}
+
+**Summary:** [1-2 sentences describing the risk landscape for {area}]
+
+| Threat ID | Evidence Source (Doc) | Example from Docs | Threat | Likelihood | Impact | Risk Priority | Mitigation Strategy |
+|-----------|-----------------------|-------------------|--------|-----------|--------|---------------|---------------------|
+| T-{area[:3].upper()}-001 | [Doc: Section] | [Specific example] | [specific threat] | [1-5] | [1-5] | P0/P1/P2 | [specific action] |
+''' for area in risk_areas])}
+
+---
+
+# COMPONENT-SPECIFIC THREAT ANALYSIS
+
+**Summary:** [2-3 sentences describing the system architecture components]
+
+| Component | Document Evidence | Example from Docs | Critical Threats | Risk Level | Mitigation Approach |
+|-----------|-------------------|-------------------|-----------------|-----------|---------------------|
+| Frontend/UI | [Doc: Section] | [example from doc] | [threats] | CRITICAL/HIGH | [approach] |
+| Backend/App | [Doc: Section] | [example from doc] | [threats] | CRITICAL/HIGH | [approach] |
+| Database/Data | [Doc: Section] | [example from doc] | [threats] | CRITICAL/HIGH | [approach] |
+
+---
+
+# ATTACK SCENARIOS & KILL CHAINS
+
+**Summary:** [2-3 sentences describing the most likely attack scenarios]
+
+## Scenario 1: [Attack Title - Highest Risk Scenario]
+
+**Summary:** [1-2 sentences describing this specific attack scenario]
+
+| Kill Chain Phase | Document Evidence | Example from Docs | Description | Detection Window | Mitigation Strategy |
+|-----------------|-------------------|-------------------|-------------|------------------|---------------------|
+| Reconnaissance | [Doc: Section] | [example from doc] | [phase details] | [detection opportunity] | [mitigation] |
+| Exploitation | [Doc: Section] | [example from doc] | [phase details] | [detection opportunity] | [mitigation] |
+
+---
+
+# COMPREHENSIVE RISK MATRIX
+
+**Summary:** [2-3 sentences explaining the risk scoring methodology]
+
+## Risk Score Calculation
+
+| Likelihood (L) | 1 - Rare | 2 - Unlikely | 3 - Possible | 4 - Likely | 5 - Very Likely |
+|---|---|---|---|---|---|
+| **5 - Catastrophic** | 5 | 10 | 15 | 20 | **25-CRITICAL** |
+| **4 - Major** | 4 | 8 | 12 | **16-HIGH** | **20-CRITICAL** |
+| **3 - Moderate** | 3 | 6 | **9-MEDIUM** | **12-HIGH** | **15-HIGH** |
+
+## All Findings Risk Matrix
+
+| Finding ID | Description | Likelihood | Impact | Risk Score | Risk Level | Priority | Owner | Remediation Timeline |
+|----------|-------------|-----------|--------|-----------|-----------|----------|-------|----------------------|
+| F001 | [critical finding] | [1-5] | [1-5] | [score] | **CRITICAL** | P0 | [owner] | 0-30 days |
+
+---
+
+# PRIORITIZED RECOMMENDATIONS
+
+**Summary:** [2-3 sentences describing the remediation strategy]
+
+## P0 - CRITICAL (Remediate in 0-30 days)
+
+| Recommendation ID | Description | Document Evidence | Estimated Effort | Estimated Cost | Success Criteria |
+|-------------------|-------------|-------------------|------------------|----------------|------------------|
+| R-P0-001 | [critical action] | [Doc: Section] | [effort] | [cost] | [criteria] |
+
+## P1 - HIGH (Remediate in 30-90 days)
+
+| Recommendation ID | Description | Document Evidence | Estimated Effort | Estimated Cost | Success Criteria |
+|-------------------|-------------|-------------------|------------------|----------------|------------------|
+| R-P1-001 | [high priority action] | [Doc: Section] | [effort] | [cost] | [criteria] |
+
+---
+
+# COMPLIANCE ASSESSMENT
+
+**Summary:** [2-3 sentences describing compliance status]
+
+| Requirement | Standard | Current State | Gap | Evidence | Remediation | Priority |
+|------------|----------|---------------|-----|----------|-------------|----------|
+| [requirement] | {', '.join(project_info['compliance'])} | [state] | [gap] | [doc evidence] | [action] | [priority] |
+
+---
+
+# IMPLEMENTATION ROADMAP
+
+**Summary:** [2-3 sentences describing the phased implementation approach]
+
+## Phase 1: Immediate Actions (0-30 days)
+- [Action 1 with document reference]
+- [Action 2 with document reference]
+
+## Phase 2: Short-term (30-90 days)
+- [Action 1 with document reference]
+- [Action 2 with document reference]
+
+## Phase 3: Long-term (90+ days)
+- [Action 1 with document reference]
+- [Action 2 with document reference]
 """
         
         # Call Claude AI with error handling
         try:
             message = client.messages.create(
-                model="claude-3-5-sonnet-20241022",
-                max_tokens=4000,
+                model="claude-sonnet-4-20250514",
+                max_tokens=16000,
                 messages=[
                     {"role": "user", "content": prompt}
                 ]
@@ -349,20 +642,32 @@ Please provide:
                 detail="Unable to generate threat assessment. Please try again later."
             )
         
+        # Calculate risk counts from report
+        report_upper = report.upper()
+        critical_count = report_upper.count("CRITICAL")
+        high_count = report_upper.count("HIGH")
+        medium_count = report_upper.count("MEDIUM")
+        
         # Create threat assessment record
         assessment = ThreatAssessment(
             organization_id=user.organization_id,
             user_id=user.id,
             project_name=threat_request.project_name,
+            project_number=getattr(threat_request, 'project_number', None),
             framework=threat_request.framework,
-            risk_type=threat_request.risk_type,
-            system_description=threat_request.system_description,
+            risk_type=', '.join(risk_areas[:3]) if risk_areas else None,
+            system_description=documents_content[:500],
             assessment_report=report,
+            report_html=report,
             status="completed",
-            report_metadata={
-                "company_name": threat_request.company_name,
+            critical_count=critical_count,
+            high_count=high_count,
+            medium_count=medium_count,
+            report_meta={
+                "framework": framework,
+                "risk_areas": risk_areas,
                 "generated_via": "API",
-                "model": "claude-3-5-sonnet-20241022"
+                "model": "claude-sonnet-4-20250514"
             }
         )
         db.add(assessment)
@@ -379,8 +684,7 @@ Please provide:
             status="success",
             metadata={
                 "framework": threat_request.framework,
-                "risk_type": threat_request.risk_type,
-                "api_key_id": api_key.id
+                "risk_areas": risk_areas
             },
             ip_address=request.client.host if request.client else None,
             user_agent=request.headers.get("user-agent")
@@ -392,7 +696,6 @@ Please provide:
         
         # Log API usage
         response_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
-        await log_api_usage(request, api_key, 200, response_time, db)
         
         return ThreatModelingResponse(
             assessment_id=assessment.id,
@@ -401,7 +704,7 @@ Please provide:
             status=assessment.status,
             report=assessment.assessment_report,
             report_html=assessment.report_html,
-            report_metadata=assessment.report_metadata,
+            report_metadata=assessment.report_meta or {},
             created_at=assessment.created_at
         )
         

@@ -131,7 +131,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                       <ul className="list-disc list-inside space-y-1 text-blue-700">
                         <li>Stored locally in your browser</li>
                         <li>Never sent to our servers</li>
-                        <li>Get your key from <a href="https://console.anthropic.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-900">AI Console</a></li>
+                        <li>Get your key from <a href="https://console.anthropic.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-900">SecureAI Console</a></li>
                       </ul>
                     </div>
                   </div>

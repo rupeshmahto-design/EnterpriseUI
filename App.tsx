@@ -75,14 +75,14 @@ function App() {
   };
 
   const handleGenerateReport = async () => {
-    if (!projectName || !projectNumber || documents.length === 0) {
-      setError('Please provide project details and upload at least one document');
+    if (!projectName || documents.length === 0) {
+      setError('Please provide project name and upload at least one document');
       return;
     }
 
-    const apiKey = localStorage.getItem('anthropic_api_key');
-    if (!apiKey) {
-      setError('Please set your Anthropic API key in Settings');
+    const apiKey = localStorage.getItem('anthropic_api_key') || localStorage.getItem('api_key');
+    if (!apiKey || apiKey.trim() === '') {
+      setError('Please set your SecureAI API key in Settings (gear icon)');
       setSidebarOpen(true);
       return;
     }
@@ -358,23 +358,6 @@ function App() {
 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Compliance Requirements
-                  </label>
-                  <select
-                    multiple
-                    value={complianceRequirements}
-                    onChange={(e) => setComplianceRequirements(Array.from(e.target.selectedOptions, option => option.value))}
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    size={3}
-                  >
-                    {COMPLIANCE_REQUIREMENTS.map(req => (
-                      <option key={req} value={req}>{req}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
                     Application Type
                   </label>
                   <select
@@ -416,6 +399,34 @@ function App() {
                       <option key={model} value={model}>{model}</option>
                     ))}
                   </select>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-slate-700 mb-3">
+                    Compliance Requirements
+                  </label>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {COMPLIANCE_REQUIREMENTS.map(req => (
+                      <label
+                        key={req}
+                        className="flex items-center gap-2 p-2 border border-slate-200 rounded-lg cursor-pointer hover:border-blue-300 transition-all"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={complianceRequirements.includes(req)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setComplianceRequirements([...complianceRequirements, req]);
+                            } else {
+                              setComplianceRequirements(complianceRequirements.filter(r => r !== req));
+                            }
+                          }}
+                          className="w-4 h-4 text-blue-600"
+                        />
+                        <span className="text-sm font-medium text-slate-900">{req}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
 
                 <div>

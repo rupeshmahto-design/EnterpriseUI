@@ -27,6 +27,7 @@ export const APPLICATION_TYPES = [
   'Mobile Application',
   'Desktop Application',
   'API/Microservices',
+  'AI/ML Project',
   'Cloud Infrastructure',
   'IoT Device',
   'Database System',
