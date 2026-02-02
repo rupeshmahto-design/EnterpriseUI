@@ -1,36 +1,87 @@
 export const PROJECT_STAGES = [
-  'Initiation',
   'Planning',
-  'Execution',
-  'Monitoring & Control',
-  'Closure'
+  'Development',
+  'Testing',
+  'Production',
+  'Maintenance'
 ];
 
 export const FRAMEWORKS = [
-  'PRINCE2',
-  'PMBOK',
-  'Agile/Scrum',
-  'MSP (Managing Successful Programmes)',
-  'P3M3',
-  'SAFe',
-  'Custom Framework'
+  'MITRE ATT&CK',
+  'STRIDE',
+  'PASTA',
+  'OCTAVE',
+  'VAST',
+  'Custom Client Framework'
+];
+
+export const BUSINESS_CRITICALITY = [
+  'Critical',
+  'High',
+  'Medium',
+  'Low'
+];
+
+export const APPLICATION_TYPES = [
+  'Web Application',
+  'Mobile Application',
+  'Desktop Application',
+  'API/Microservices',
+  'Cloud Infrastructure',
+  'IoT Device',
+  'Database System',
+  'Other'
+];
+
+export const DEPLOYMENT_MODELS = [
+  'Cloud (AWS)',
+  'Cloud (Azure)',
+  'Cloud (GCP)',
+  'On-Premises',
+  'Hybrid',
+  'Multi-Cloud'
+];
+
+export const ENVIRONMENTS = [
+  'Production',
+  'Staging',
+  'Development',
+  'Testing',
+  'DR/Backup'
+];
+
+export const RISK_FOCUS_AREAS = [
+  'Agentic AI Risk',
+  'Model Risk',
+  'Data Security Risk',
+  'Infrastructure Risk',
+  'Compliance Risk',
+  'Privacy Risk',
+  'Supply Chain Risk',
+  'Identity & Access Risk'
+];
+
+export const COMPLIANCE_REQUIREMENTS = [
+  'SOC 2',
+  'ISO 27001',
+  'GDPR',
+  'HIPAA',
+  'PCI DSS',
+  'NIST',
+  'CIS Controls',
+  'CCPA',
+  'None'
 ];
 
 export const DOCUMENT_CATEGORIES = [
-  'Business Case',
-  'Project Charter',
-  'Requirement',
-  'Architecture',
-  'Design',
-  'Budget',
-  'Plan',
-  'Risk Register',
-  'Status Report',
-  'Stakeholder Register',
-  'Quality Plan',
-  'Communication Plan',
-  'Change Log',
-  'Issue Log',
+  'Architecture Diagram',
+  'Data Flow Diagram',
+  'System Design',
+  'API Documentation',
+  'Security Requirements',
+  'Compliance Documentation',
+  'Risk Assessment',
+  'Incident Response Plan',
   'Other'
 ];
 

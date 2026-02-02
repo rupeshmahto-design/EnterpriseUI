@@ -7,96 +7,58 @@ export interface ProjectDocument {
   category: string;
 }
 
-export interface AssuranceReport {
-  overallScore: number;
+export interface ThreatAssessment {
+  overallRiskScore: number;
   summary: string;
-  gapAnalysis: GapAnalysisItem[];
-  benefitsRealisation: BenefitItem[];
-  benefitsSummary?: BenefitsSummary;
-  frameworkAlignment: FrameworkAlignment;
-  financialAssurance: FinancialAssurance;
-  riskAnalysis: RiskAnalysisItem[];
-  governanceCompliance: GovernanceItem[];
+  threats: ThreatItem[];
+  attackVectors: AttackVector[];
+  mitigations: Mitigation[];
+  complianceGaps: ComplianceGap[];
   recommendations: string[];
-  timelineHealth: TimelineHealth;
-  resourceHealth: ResourceHealth;
-  stakeholderAssurance: StakeholderItem[];
+  riskMatrix: RiskMatrix;
 }
 
-export interface GapAnalysisItem {
-  area: string;
-  gap: string;
-  severity: 'Low' | 'Medium' | 'High';
-  recommendation: string;
-  documentReference?: string;
-}
-
-export interface BenefitItem {
-  name: string;
+export interface ThreatItem {
+  id: string;
   category: string;
-  expectedValue: string;
-  readinessScore: number;
-  risks: string[];
-  mitigation: string;
-}
-
-export interface BenefitsSummary {
-  totalPlannedValue: string;
-  projectedAnnualValue: string;
-  benefitsCount: number;
-  realizationOutlook: string;
-}
-
-export interface FrameworkAlignment {
-  framework: string;
-  alignmentScore: number;
-  strengths: string[];
-  gaps: string[];
-}
-
-export interface FinancialAssurance {
-  budgetStatus: string;
-  riskScore: number;
-  findings: string[];
-  recommendations: string[];
-}
-
-export interface RiskAnalysisItem {
-  risk: string;
-  impact: string;
+  threat: string;
+  severity: 'Critical' | 'High' | 'Medium' | 'Low';
   likelihood: string;
-  mitigation: string;
-  owner?: string;
+  impact: string;
+  affectedAssets: string[];
+  description: string;
 }
 
-export interface GovernanceItem {
-  area: string;
-  status: 'Compliant' | 'Partial' | 'Non-Compliant';
-  findings: string[];
-  actions: string[];
+export interface AttackVector {
+  vector: string;
+  technique: string;
+  mitreId?: string;
+  description: string;
+  exploitability: string;
 }
 
-export interface TimelineHealth {
-  status: string;
-  keyDates: Array<{
-    milestone: string;
-    date: string;
-    confidence: string;
-  }>;
-  delays: string[];
+export interface Mitigation {
+  threat: string;
+  control: string;
+  priority: 'Critical' | 'High' | 'Medium' | 'Low';
+  status: 'Implemented' | 'Planned' | 'Required';
+  effort: string;
+  description: string;
 }
 
-export interface ResourceHealth {
-  adequacy: string;
-  concerns: string[];
-  recommendations: string[];
+export interface ComplianceGap {
+  framework: string;
+  requirement: string;
+  currentState: string;
+  gap: string;
+  remediation: string;
 }
 
-export interface StakeholderItem {
-  stakeholder: string;
-  engagementLevel: string;
-  concerns: string[];
-  actions: string[];
+export interface RiskMatrix {
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
 }
 
 export interface User {
