@@ -431,6 +431,7 @@ async def create_threat_assessment(
 ):
     """Create a new threat assessment using AI (rate limited to 10/minute)"""
     start_time = datetime.utcnow()
+    logger.info(f"🚀 Starting threat assessment generation for user {user.email} - Project: {threat_request.project_name}")
     
     try:
         # Validate inputs
@@ -607,6 +608,8 @@ async def create_threat_assessment(
         
         # Log API usage
         response_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+        response_time_seconds = response_time / 1000
+        logger.info(f"✅ Threat assessment completed for {threat_request.project_name} - Duration: {response_time_seconds:.2f} seconds ({response_time}ms)")
         
         return ThreatModelingResponse(
             assessment_id=assessment.id,

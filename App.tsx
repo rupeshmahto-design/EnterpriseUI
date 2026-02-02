@@ -3,6 +3,7 @@ import { useAuth } from './context/AuthContext';
 import { Login } from './components/Login';
 import { Register } from './components/Register';
 import { AdminDashboard } from './components/AdminDashboard';
+import { ComplianceDocumentation } from './components/ComplianceDocumentation';
 import FileUpload from './components/FileUpload';
 import ReportHistory from './components/ReportHistory';
 import Sidebar from './components/Sidebar';
@@ -10,7 +11,7 @@ import { ProjectDocument } from './types';
 import { PROJECT_STAGES, FRAMEWORKS, FRAMEWORK_DESCRIPTIONS, BUSINESS_CRITICALITY, APPLICATION_TYPES, 
          DEPLOYMENT_MODELS, ENVIRONMENTS, RISK_FOCUS_AREAS, RISK_AREA_DESCRIPTIONS, COMPLIANCE_REQUIREMENTS, API_BASE_URL } from './constants';
 
-type ViewType = 'upload' | 'dashboard' | 'report' | 'history' | 'admin';
+type ViewType = 'upload' | 'dashboard' | 'report' | 'history' | 'admin' | 'compliance';
 
 // Simple markdown to HTML converter
 const markdownToHtml = (markdown: string): string => {
@@ -701,6 +702,7 @@ function App() {
                   <div
                     key={fw}
                     onClick={() => {
+                      if (fw === 'Custom Client Framework') return; // Disabled
                       if (frameworks.includes(fw)) {
                         // Don't allow deselecting all frameworks
                         if (frameworks.length > 1) {
@@ -715,10 +717,12 @@ function App() {
                         setFramework(fw);
                       }
                     }}
-                    className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                      frameworks.includes(fw)
-                        ? 'border-blue-600 bg-blue-50'
-                        : 'border-slate-200 hover:border-blue-300'
+                    className={`p-4 border-2 rounded-lg transition-all ${
+                      fw === 'Custom Client Framework'
+                        ? 'border-slate-200 bg-slate-50 opacity-60 cursor-not-allowed'
+                        : frameworks.includes(fw)
+                        ? 'border-blue-600 bg-blue-50 cursor-pointer'
+                        : 'border-slate-200 hover:border-blue-300 cursor-pointer'
                     }`}
                     title={FRAMEWORK_DESCRIPTIONS[fw] || ''}
                   >
@@ -726,7 +730,9 @@ function App() {
                       <input
                         type="checkbox"
                         checked={frameworks.includes(fw)}
+                        disabled={fw === 'Custom Client Framework'}
                         onChange={() => {
+                          if (fw === 'Custom Client Framework') return;
                           if (frameworks.includes(fw)) {
                             if (frameworks.length > 1) {
                               setFrameworks(frameworks.filter(f => f !== fw));
@@ -740,9 +746,16 @@ function App() {
                         }}
                         className="text-blue-600 w-4 h-4"
                       />
-                      <h3 className="font-bold text-slate-900">{fw}</h3>
+                      <div className="flex items-center gap-2 flex-1">
+                        <h3 className={`font-bold ${fw === 'Custom Client Framework' ? 'text-slate-500' : 'text-slate-900'}`}>{fw}</h3>
+                        {fw === 'Custom Client Framework' && (
+                          <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-amber-100 text-amber-800 rounded-full border border-amber-300">
+                            <i className="fas fa-star mr-1"></i>Customize with Client
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <p className="text-xs text-slate-600">
+                    <p className={`text-xs ${fw === 'Custom Client Framework' ? 'text-slate-400' : 'text-slate-600'}`}>
                       {fw === 'MITRE ATT&CK' && 'Comprehensive framework for understanding adversary behavior'}
                       {fw === 'STRIDE' && "Microsoft's threat modeling methodology"}
                       {fw === 'PASTA' && 'Process for Attack Simulation and Threat Analysis'}
@@ -920,7 +933,98 @@ function App() {
             <AdminDashboard />
           </div>
         )}
+
+        {view === 'compliance' && (
+          <ComplianceDocumentation />
+        )}
       </main>
+
+      {/* Footer */}
+      <footer className="bg-gradient-to-br from-slate-50 to-slate-100 border-t border-slate-200 mt-auto">
+        <div className="max-w-7xl mx-auto px-6 py-12">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {/* Left Section - Branding */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
+                  <i className="fas fa-shield-alt text-white text-xl"></i>
+                </div>
+                <h3 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                  THREAT MODELING AI
+                </h3>
+              </div>
+              <p className="text-sm text-slate-600 leading-relaxed">
+                An AI-powered threat assessment platform designed for enterprise security and compliance. 
+                Built for security teams, PMOs, and executive oversight.
+              </p>
+            </div>
+
+            {/* Middle Section - Frameworks */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Security Frameworks</h4>
+              <ul className="space-y-2">
+                <li className="flex items-center gap-2 text-sm text-slate-600">
+                  <i className="fas fa-check text-green-600 text-xs"></i>
+                  <span>MITRE ATT&CK</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm text-slate-600">
+                  <i className="fas fa-check text-green-600 text-xs"></i>
+                  <span>STRIDE Methodology</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm text-slate-600">
+                  <i className="fas fa-check text-green-600 text-xs"></i>
+                  <span>PASTA Framework</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm text-slate-600">
+                  <i className="fas fa-check text-green-600 text-xs"></i>
+                  <span>ISO 31000 Risk</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Right Section - Legal & Security */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Enterprise & Security</h4>
+              <ul className="space-y-2">
+                <li className="flex items-center gap-2 text-sm text-slate-600">
+                  <i className="fas fa-file-alt text-blue-600 text-xs"></i>
+                  <span>Audit Logs</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm text-slate-600">
+                  <i className="fas fa-lock text-blue-600 text-xs"></i>
+                  <span>Data Privacy</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm text-slate-600">
+                  <i className="fas fa-key text-blue-600 text-xs"></i>
+                  <span>API Credentials</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer hover:text-blue-700" onClick={() => setView('compliance')}>
+                  <i className="fas fa-certificate text-blue-600 text-xs"></i>
+                  <span className="hover:underline">ISO 42001 Compliance</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          {/* Bottom Bar */}
+          <div className="mt-8 pt-6 border-t border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
+            <p className="text-xs text-slate-500">
+              © {new Date().getFullYear()} Threat Modeling AI Systems. All rights reserved.
+            </p>
+            <div className="flex items-center gap-4 text-xs text-slate-500">
+              <span className="flex items-center gap-1">
+                <i className="fas fa-code-branch text-blue-600"></i>
+                <span className="font-semibold">v1.1.1</span>
+              </span>
+              <span>•</span>
+              <span className="flex items-center gap-1">
+                <i className="fas fa-shield-alt text-green-600"></i>
+                <span className="font-semibold">Encrypted Session</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </footer>
 
       {/* Sidebar */}
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
