@@ -18,7 +18,7 @@ beautifulsoup4==4.12.3
 # Data Handling
 # Allow newer pandas for compatibility with newer Python (e.g., 3.14)
 # Use a specific tested wheel where possible
-pandas==2.1.4  # updated for better wheel availability
+pandas==2.2.3  # Python 3.13 support with pre-built wheels
 
 # Utilities
 requests==2.31.0
