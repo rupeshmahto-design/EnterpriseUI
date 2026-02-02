@@ -306,6 +306,18 @@ async def log_api_usage(
 
 # API Endpoints
 
+@app.get("/")
+async def root():
+    """Root endpoint redirect to API docs"""
+    return RedirectResponse(url="/api/docs")
+
+
+@app.get("/health")
+async def simple_health_check():
+    """Simple health check endpoint without rate limiting"""
+    return {"status": "healthy"}
+
+
 @app.get("/api/health")
 @limiter.limit("60/minute")
 async def health_check(request: Request):

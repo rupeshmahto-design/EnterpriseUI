@@ -19,6 +19,19 @@ DATABASE_URL = os.getenv(
     "sqlite:///./threat_modeling.db",
 )
 
+# Clean up DATABASE_URL if it has psql command prefix (common Render/Neon copy-paste error)
+if DATABASE_URL:
+    # Remove 'psql ' prefix if present
+    if DATABASE_URL.startswith("psql "):
+        DATABASE_URL = DATABASE_URL[5:].strip()
+    
+    # Remove surrounding quotes if present
+    DATABASE_URL = DATABASE_URL.strip("'\"")
+    
+    # Handle postgresql+psycopg2:// conversion
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
 # Create engine with special handling for SQLite
 if DATABASE_URL.startswith("sqlite"):
     engine = create_engine(
