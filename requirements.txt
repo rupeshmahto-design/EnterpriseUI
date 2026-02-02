@@ -18,7 +18,7 @@ beautifulsoup4==4.12.3
 # Data Handling
 # Allow newer pandas for compatibility with newer Python (e.g., 3.14)
 # Use a specific tested wheel where possible
-pandas==2.3.3  # updated to support Python 3.14 and newer wheels
+pandas==2.1.4  # updated for better wheel availability
 
 # Utilities
 requests==2.31.0
@@ -35,7 +35,7 @@ alembic==1.13.1  # Database migrations
 # API Framework
 fastapi==0.108.0
 uvicorn[standard]==0.25.0  # ASGI server
-pydantic==2.5.3  # Data validation
+pydantic==2.10.6  # Data validation - updated for pre-built wheels
 
 # Authentication & Security
 # python3-saml==1.16.0  # SAML SSO - disabled for Railway (requires xmlsec system libs)
