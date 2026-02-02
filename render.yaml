@@ -3,8 +3,6 @@ services:
   - type: pserv
     name: threat-modeling-db
     plan: free
-    databaseName: threat_modeling
-    databaseUser: postgres
 
   # FastAPI Backend
   - type: web
