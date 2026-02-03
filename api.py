@@ -18,7 +18,11 @@ from datetime import datetime, timedelta
 import anthropic
 import os
 import secrets
+import logging
 from pathlib import Path
+
+# Configure logger
+logger = logging.getLogger(__name__)
 
 from models import (
     Organization, User, APIKey, AuditLog, APIUsageLog, 

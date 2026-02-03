@@ -256,8 +256,19 @@ function App() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        const errorMessage = errorData.detail || 'Failed to generate threat assessment';
+        let errorMessage = 'Failed to generate threat assessment';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.detail || errorMessage;
+        } catch (parseError) {
+          // If response is not JSON, try to get text
+          try {
+            const errorText = await response.text();
+            errorMessage = errorText || `Server error (${response.status})`;
+          } catch {
+            errorMessage = `Server error (${response.status})`;
+          }
+        }
         
         // Show specific guidance for API key errors
         if (response.status === 401 || errorMessage.includes('API key') || errorMessage.includes('authentication')) {
