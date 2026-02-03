@@ -345,51 +345,62 @@ class Token(BaseModel):
 @app.post("/users/register")
 async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
     """Register a new user"""
-    # Check if user exists
-    existing_user = db.query(User).filter(User.email == user_data.email).first()
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
+    try:
+        # Check if user exists
+        existing_user = db.query(User).filter(User.email == user_data.email).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered"
+            )
+        
+        # Create or get default organization
+        default_org = db.query(Organization).filter(Organization.slug == "default").first()
+        if not default_org:
+            default_org = Organization(
+                name="Default Organization",
+                slug="default",
+                max_users=100,
+                max_api_calls_per_month=10000
+            )
+            db.add(default_org)
+            db.commit()
+            db.refresh(default_org)
+        
+        # Generate username from email
+        username = user_data.email.split('@')[0]
+        # Ensure username is unique
+        counter = 1
+        original_username = username
+        while db.query(User).filter(User.username == username).first():
+            username = f"{original_username}{counter}"
+            counter += 1
+        
+        # Create new user
+        new_user = User(
+            email=user_data.email,
+            username=username,
+            password_hash=get_password_hash(user_data.password),
+            full_name=user_data.full_name,
+            role="user",
+            is_active=True,
+            organization_id=default_org.id
         )
-    
-    # Create or get default organization
-    default_org = db.query(Organization).filter(Organization.slug == "default").first()
-    if not default_org:
-        default_org = Organization(
-            name="Default Organization",
-            slug="default",
-            max_users=100,
-            max_api_calls_per_month=10000
-        )
-        db.add(default_org)
+        db.add(new_user)
         db.commit()
-        db.refresh(default_org)
-    
-    # Generate username from email
-    username = user_data.email.split('@')[0]
-    # Ensure username is unique
-    counter = 1
-    original_username = username
-    while db.query(User).filter(User.username == username).first():
-        username = f"{original_username}{counter}"
-        counter += 1
-    
-    # Create new user
-    new_user = User(
-        email=user_data.email,
-        username=username,
-        password_hash=get_password_hash(user_data.password),
-        full_name=user_data.full_name,
-        role="user",
-        is_active=True,
-        organization_id=default_org.id
-    )
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-    
-    return {"message": "User created successfully", "user_id": new_user.id}
+        db.refresh(new_user)
+        
+        return {"message": "User created successfully", "user_id": new_user.id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"Registration error: {str(e)}")
+        print(traceback.format_exc())
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Registration failed: {str(e)}"
+        )
 
 @app.post("/token", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
