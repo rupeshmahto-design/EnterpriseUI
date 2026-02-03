@@ -533,6 +533,13 @@ async def create_threat_assessment(
         if not documents_content:
             documents_content = threat_request.system_description or "No system description provided. This is a preliminary threat assessment based on the project information provided."
         
+        # Log document size for debugging
+        doc_chars = len(documents_content)
+        doc_tokens_estimate = doc_chars // 4
+        logger.info(f"📄 Documents: {doc_chars:,} characters (~{doc_tokens_estimate:,} tokens)")
+        logger.info(f"🎯 Framework: {frameworks[0] if frameworks else 'None'}")
+        logger.info(f"🔍 Risk areas: {len(risk_focus_areas)} selected")
+        
         # Build project info dict for prompt
         project_info = {
             'name': threat_request.project_name,
@@ -555,6 +562,11 @@ async def create_threat_assessment(
             risk_areas=risk_focus_areas,
             assessment_date=assessment_date
         )
+        
+        # Log final prompt size
+        prompt_chars = len(prompt)
+        prompt_tokens_estimate = prompt_chars // 4
+        logger.info(f"📝 Final prompt: {prompt_chars:,} characters (~{prompt_tokens_estimate:,} tokens)")
         
         # Call Claude AI
         try:
