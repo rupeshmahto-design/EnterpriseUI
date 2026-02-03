@@ -531,6 +531,19 @@ async def create_threat_assessment(
         if not documents_content:
             documents_content = threat_request.system_description or "No system description provided. This is a preliminary threat assessment based on the project information provided."
         
+        # Validate document size (rough token estimation: 1 token ≈ 4 characters)
+        # Claude Sonnet 4 has 200k token context limit, leave room for framework descriptions and output
+        estimated_tokens = len(documents_content) // 4
+        MAX_DOCUMENT_TOKENS = 150000  # Leave room for frameworks (~30k) and output (~20k)
+        
+        if estimated_tokens > MAX_DOCUMENT_TOKENS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Documents are too large. Total size: ~{estimated_tokens:,} tokens (max: {MAX_DOCUMENT_TOKENS:,}). "
+                       f"Please reduce document size by: 1) Uploading fewer documents, 2) Removing unnecessary content, "
+                       f"or 3) Summarizing large documents before upload."
+            )
+        
         # Build project info dict for prompt
         project_info = {
             'name': threat_request.project_name,
@@ -568,9 +581,16 @@ async def create_threat_assessment(
                 detail="Invalid or expired API key. Please get a new key from console.anthropic.com/settings/keys and update it in Settings."
             )
         except anthropic.APIError as api_error:
+            error_message = str(api_error)
+            # Check if it's a token limit error
+            if "too long" in error_message.lower() or "maximum" in error_message.lower():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Documents exceed AI model's capacity. Please reduce document size by removing unnecessary content or splitting into smaller assessments."
+                )
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"AI service error: {str(api_error)}"
+                detail=f"AI service error: {error_message}"
             )
         except Exception as ai_error:
             raise HTTPException(
