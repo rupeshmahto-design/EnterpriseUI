@@ -501,12 +501,14 @@ async def create_threat_assessment(
         
         # Build project info
         # Handle both single framework and multi-framework selection
+        # IMPORTANT: Old Streamlit app only used ONE framework at a time to stay within token limits
+        # Match that behavior by using only the first framework
         frameworks = []
-        if threat_request.frameworks:
-            frameworks = threat_request.frameworks
+        if threat_request.frameworks and len(threat_request.frameworks) > 0:
+            frameworks = [threat_request.frameworks[0]]  # Use only first framework
         elif threat_request.framework:
             if isinstance(threat_request.framework, list):
-                frameworks = threat_request.framework
+                frameworks = [threat_request.framework[0]]  # Use only first framework
             else:
                 frameworks = [threat_request.framework]
         else:
