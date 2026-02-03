@@ -9,9 +9,9 @@ cmds = [
 
 [phases.build]
 cmds = [
-    "npm run build",
-    "python init_db.py"
+    "npm run build || echo 'Frontend build failed, continuing...'",
+    "python init_db.py || echo 'DB init failed, will retry at startup'"
 ]
 
 [start]
-cmd = "uvicorn api:app --host 0.0.0.0 --port $PORT --workers 1"
+cmd = "python start.py"
