@@ -50,8 +50,15 @@ def main():
     print("\n🗄️  Checking database connection...")
     try:
         from database import engine
+        from models import Base
         with engine.connect() as conn:
             print("✅ Database connection successful")
+        
+        # Create tables if they don't exist
+        print("\n📊 Ensuring database tables exist...")
+        Base.metadata.create_all(bind=engine)
+        print("✅ Database tables ready")
+        
     except Exception as e:
         print(f"❌ Database connection failed: {e}")
         print("   Will attempt to continue anyway...")
