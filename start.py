@@ -49,7 +49,7 @@ def main():
     # Check database connection
     print("\n🗄️  Checking database connection...")
     try:
-        from database import engine
+        from database import engine, SessionLocal
         from models import Base
         with engine.connect() as conn:
             print("✅ Database connection successful")
@@ -58,6 +58,52 @@ def main():
         print("\n📊 Ensuring database tables exist...")
         Base.metadata.create_all(bind=engine)
         print("✅ Database tables ready")
+        
+        # Create admin user if it doesn't exist
+        print("\n👤 Checking for admin user...")
+        from models import User, Organization
+        from auth import get_password_hash
+        db = SessionLocal()
+        try:
+            admin_exists = db.query(User).filter(User.role == "admin").first()
+            if not admin_exists:
+                print("   Creating admin user...")
+                # Get or create default org
+                default_org = db.query(Organization).filter(Organization.slug == "default").first()
+                if not default_org:
+                    default_org = Organization(
+                        name="SecureAI Organization",
+                        slug="default",
+                        max_users=1000,
+                        max_api_calls_per_month=100000
+                    )
+                    db.add(default_org)
+                    db.commit()
+                    db.refresh(default_org)
+                
+                # Create admin
+                admin_user = User(
+                    email="admin@secureai.com",
+                    username="admin",
+                    password_hash=get_password_hash("admin123"),
+                    full_name="Administrator",
+                    role="admin",
+                    is_active=True,
+                    organization_id=default_org.id
+                )
+                db.add(admin_user)
+                db.commit()
+                print("✅ Admin user created!")
+                print("   Email: admin@secureai.com")
+                print("   Password: admin123")
+                print("   ⚠️  Change password after first login!")
+            else:
+                print("✅ Admin user already exists")
+        except Exception as e:
+            print(f"⚠️  Admin creation error: {e}")
+            db.rollback()
+        finally:
+            db.close()
         
     except Exception as e:
         print(f"❌ Database connection failed: {e}")
