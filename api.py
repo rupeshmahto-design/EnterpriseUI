@@ -206,7 +206,7 @@ async def on_startup():
             warnings.warn(
                 "SECURITY WARNING: Using weak JWT secret in development. "
                 "Set JWT_SECRET_KEY environment variable!",
-                SecurityWarning
+                UserWarning
             )
             secret = "dev-secret-change-me-" + secrets.token_hex(16)
     
