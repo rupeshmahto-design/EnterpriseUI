@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { API_BASE_URL } from '../constants';
 
 interface User {
   id: number;
@@ -67,8 +68,6 @@ export const AdminDashboard: React.FC = () => {
   const [selectedRole, setSelectedRole] = useState<'admin' | 'manager' | 'user'>('user');
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
 
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-
   useEffect(() => {
     if (activeTab === 'overview') {
       loadDashboardStats();
@@ -84,7 +83,7 @@ export const AdminDashboard: React.FC = () => {
     setError(null);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/api/dashboard/stats`, {
+      const response = await fetch(`${API_BASE_URL}/api/dashboard/stats`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -118,10 +117,10 @@ export const AdminDashboard: React.FC = () => {
     setError(null);
     try {
       const token = localStorage.getItem('token');
-      console.log('Fetching users from:', `${API_URL}/api/users`);
+      console.log('Fetching users from:', `${API_BASE_URL}/api/users`);
       console.log('Token exists:', !!token);
       
-      const response = await fetch(`${API_URL}/api/users`, {
+      const response = await fetch(`${API_BASE_URL}/api/users`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -151,7 +150,7 @@ export const AdminDashboard: React.FC = () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/api/audit-logs`, {
+      const response = await fetch(`${API_BASE_URL}/api/audit-logs`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -171,7 +170,7 @@ export const AdminDashboard: React.FC = () => {
   const handleToggleUserStatus = async (userId: number, currentStatus: boolean) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/api/users/${userId}/status`, {
+      const response = await fetch(`${API_BASE_URL}/api/users/${userId}/status`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -193,7 +192,7 @@ export const AdminDashboard: React.FC = () => {
     
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/api/users/${selectedUserId}/password`, {
+      const response = await fetch(`${API_BASE_URL}/api/users/${selectedUserId}/password`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -218,7 +217,7 @@ export const AdminDashboard: React.FC = () => {
     
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/api/users/${selectedUserId}/role`, {
+      const response = await fetch(`${API_BASE_URL}/api/users/${selectedUserId}/role`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -240,7 +239,7 @@ export const AdminDashboard: React.FC = () => {
   const handleInviteUser = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/api/users/invite`, {
+      const response = await fetch(`${API_BASE_URL}/api/users/invite`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -265,7 +264,7 @@ export const AdminDashboard: React.FC = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/api/users/${userId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
