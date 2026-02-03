@@ -1,5 +1,5 @@
 # Core Dependencies
-streamlit==1.29.0
+# streamlit==1.29.0  # Disabled - using FastAPI + React instead
 anthropic==0.39.0
 python-dotenv==1.0.0
 
