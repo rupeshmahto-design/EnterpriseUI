@@ -568,16 +568,9 @@ async def create_threat_assessment(
                 detail="Invalid or expired API key. Please get a new key from console.anthropic.com/settings/keys and update it in Settings."
             )
         except anthropic.APIError as api_error:
-            error_message = str(api_error)
-            # Check if it's a token limit error
-            if "too long" in error_message.lower() or "maximum" in error_message.lower():
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Documents exceed AI model's capacity. Please reduce document size by removing unnecessary content or splitting into smaller assessments."
-                )
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"AI service error: {error_message}"
+                detail=f"AI service error: {str(api_error)}"
             )
         except Exception as ai_error:
             raise HTTPException(
