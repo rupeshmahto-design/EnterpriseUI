@@ -6,7 +6,8 @@ FastAPI endpoints with API key authentication
 from fastapi import FastAPI, Depends, HTTPException, status, Header, Request, Response
 from fastapi.security import APIKeyHeader, OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse, PlainTextResponse
+from fastapi.responses import RedirectResponse, PlainTextResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -17,6 +18,7 @@ from datetime import datetime, timedelta
 import anthropic
 import os
 import secrets
+from pathlib import Path
 
 from models import (
     Organization, User, APIKey, AuditLog, APIUsageLog, 
@@ -1380,6 +1382,30 @@ async def get_dashboard_stats(
         print(f"Dashboard stats error: {str(e)}")
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Failed to load dashboard statistics: {str(e)}")
+
+
+# ==================== Static File Serving ====================
+
+# Serve React frontend static files
+static_dir = Path(__file__).parent / "dist"
+if static_dir.exists() and static_dir.is_dir():
+    # Mount static assets (JS, CSS, images)
+    app.mount("/assets", StaticFiles(directory=str(static_dir / "assets")), name="assets")
+    
+    # Catch-all route to serve index.html for React Router
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        """Serve React frontend for all non-API routes"""
+        # Skip API routes
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="API endpoint not found")
+        
+        # Serve index.html for all other routes (React Router will handle routing)
+        index_file = static_dir / "index.html"
+        if index_file.exists():
+            return FileResponse(index_file)
+        
+        raise HTTPException(status_code=404, detail="Frontend not built. Run 'npm run build' first.")
 
 
 if __name__ == "__main__":

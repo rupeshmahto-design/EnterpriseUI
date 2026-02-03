@@ -1,11 +1,17 @@
 [phases.setup]
-nixPkgs = ["python39", "postgresql"]
+nixPkgs = ["python39", "postgresql", "nodejs-18_x"]
 
 [phases.install]
-cmds = ["pip install -r requirements.txt"]
+cmds = [
+    "pip install -r requirements.txt",
+    "npm install"
+]
 
 [phases.build]
-cmds = ["python init_db.py"]
+cmds = [
+    "npm run build",
+    "python init_db.py"
+]
 
 [start]
 cmd = "uvicorn api:app --host 0.0.0.0 --port $PORT --workers 1"
