@@ -532,16 +532,18 @@ async def create_threat_assessment(
             documents_content = threat_request.system_description or "No system description provided. This is a preliminary threat assessment based on the project information provided."
         
         # Validate document size (rough token estimation: 1 token ≈ 4 characters)
-        # Claude Sonnet 4 has 200k token context limit, leave room for framework descriptions and output
+        # Claude Sonnet 4 has 200k token input limit, framework descriptions use ~10-15k tokens
         estimated_tokens = len(documents_content) // 4
-        MAX_DOCUMENT_TOKENS = 150000  # Leave room for frameworks (~30k) and output (~20k)
+        MAX_DOCUMENT_TOKENS = 180000  # Allow up to 180k tokens for documents, rest for frameworks/metadata
         
         if estimated_tokens > MAX_DOCUMENT_TOKENS:
+            # Calculate how much to reduce
+            excess_tokens = estimated_tokens - MAX_DOCUMENT_TOKENS
+            excess_chars = excess_tokens * 4
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Documents are too large. Total size: ~{estimated_tokens:,} tokens (max: {MAX_DOCUMENT_TOKENS:,}). "
-                       f"Please reduce document size by: 1) Uploading fewer documents, 2) Removing unnecessary content, "
-                       f"or 3) Summarizing large documents before upload."
+                detail=f"Documents are too large: ~{estimated_tokens:,} tokens (max: {MAX_DOCUMENT_TOKENS:,}). "
+                       f"Please reduce by ~{excess_chars:,} characters (~{excess_tokens:,} tokens) by removing unnecessary content or splitting into multiple assessments."
             )
         
         # Build project info dict for prompt
