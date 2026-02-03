@@ -205,6 +205,24 @@ function App() {
     }
   };
 
+  const resetForm = () => {
+    setProjectName('');
+    setProjectNumber('');
+    setProjectStage(PROJECT_STAGES[0]);
+    setFramework(FRAMEWORKS[0]);
+    setFrameworks([FRAMEWORKS[0]]);
+    setBusinessCriticality(BUSINESS_CRITICALITY[0]);
+    setApplicationType(APPLICATION_TYPES[0]);
+    setDeploymentModel(DEPLOYMENT_MODELS[0]);
+    setEnvironment(ENVIRONMENTS[0]);
+    setComplianceRequirements([]);
+    setRiskFocusAreas([]);
+    setDocuments([]);
+    setReport(null);
+    setCurrentAssessmentId(null);
+    setError('');
+  };
+
   const handleFilesAdded = (newDocs: ProjectDocument[]) => {
     setDocuments([...documents, ...newDocs]);
     setError('');
@@ -355,9 +373,16 @@ function App() {
     setProjectNumber('');
     setProjectStage(PROJECT_STAGES[0]);
     setFramework(FRAMEWORKS[0]);
-    setFrameworks([FRAMEWORKS[0]]); // Reset to default framework
+    setFrameworks([FRAMEWORKS[0]]);
+    setBusinessCriticality(BUSINESS_CRITICALITY[0]);
+    setApplicationType(APPLICATION_TYPES[0]);
+    setDeploymentModel(DEPLOYMENT_MODELS[0]);
+    setEnvironment(ENVIRONMENTS[0]);
+    setComplianceRequirements([]);
+    setRiskFocusAreas([]);
     setDocuments([]);
     setReport(null);
+    setCurrentAssessmentId(null);
     setView('upload');
     setError('');
   };
@@ -427,7 +452,10 @@ function App() {
 
             <nav className="hidden md:flex items-center gap-2">
               <button
-                onClick={() => setView('upload')}
+                onClick={() => {
+                  resetForm();
+                  setView('upload');
+                }}
                 className={`px-4 py-2 rounded-lg font-medium transition-colors ${
                   view === 'upload'
                     ? 'bg-blue-100 text-blue-700'
