@@ -309,11 +309,7 @@ async def log_api_usage(
 
 # API Endpoints
 
-@app.get("/")
-async def root():
-    """Root endpoint redirect to API docs"""
-    return RedirectResponse(url="/api/docs")
-
+# Root endpoint removed - will be handled by catch-all frontend route at the end
 
 @app.get("/health")
 async def simple_health_check():
