@@ -388,10 +388,13 @@ def process_files_with_vision(files_data: list) -> tuple:
             logger.info(f"📷 {filename}: {media_type}, ~{image_size_bytes / 1024:.1f}KB")
             
             # Debug: Log first 50 chars of base64 data to verify format
+            print(f"🔍 DEBUG Base64 preview for {filename}: '{base64_data[:50]}...'")
             logger.info(f"🔍 Base64 preview: '{base64_data[:50]}...'")
             
             # Clean base64 data - remove any whitespace
             base64_data = base64_data.strip().replace('\n', '').replace('\r', '').replace(' ', '')
+            print(f"🔍 DEBUG After cleaning: '{base64_data[:50]}...'")
+            logger.info(f"🧹 Cleaned base64 length: {len(base64_data)}")
             
             image_files.append({
                 'name': filename,

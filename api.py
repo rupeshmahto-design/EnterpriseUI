@@ -784,6 +784,9 @@ async def create_threat_assessment(
             created_at=assessment.created_at
         )
         
+    except HTTPException:
+        # Re-raise HTTP exceptions (don't catch them)
+        raise
     except Exception as e:
         # Log error
         audit_log = AuditLog(
