@@ -26,11 +26,25 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFilesAdded }) => {
         let content = '';
         const fileExtension = file.name.toLowerCase().split('.').pop() || '';
         
+        // For images, read as base64 for Vision API
+        if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'].includes(fileExtension)) {
+          const reader = new FileReader();
+          content = await new Promise<string>((resolve) => {
+            reader.onload = () => {
+              const base64 = reader.result as string;
+              // Strip the data URL prefix (e.g., "data:image/png;base64,")
+              const base64Data = base64.split(',')[1] || base64;
+              resolve(base64Data);
+            };
+            reader.readAsDataURL(file);
+          });
+          console.log(`Image ${file.name} loaded as base64 for Vision API`);
+        }
         // For text/markdown files, read directly in browser (faster)
-        if (['txt', 'md'].includes(fileExtension)) {
+        else if (['txt', 'md'].includes(fileExtension)) {
           content = await file.text();
         } else {
-          // For other file types (PDF, DOCX, XLSX, images), send to backend for processing
+          // For other file types (PDF, DOCX, XLSX), send to backend for processing
           try {
             const formData = new FormData();
             formData.append('file', file);

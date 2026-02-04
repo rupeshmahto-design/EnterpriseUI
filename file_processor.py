@@ -320,7 +320,7 @@ def process_files_with_vision(files_data: list) -> tuple:
     Process files with Claude Vision API support for images
     
     Args:
-        files_data: List of dicts with 'name' and 'content' (bytes)
+        files_data: List of dicts with 'name' and 'content' (bytes or str)
         
     Returns:
         Tuple of (text_content_string, image_content_list, metadata_dict)
@@ -338,21 +338,43 @@ def process_files_with_vision(files_data: list) -> tuple:
     
     for file_data in files_data:
         filename = file_data.get('name', 'unknown')
-        file_content_bytes = file_data.get('content', b'')
+        content = file_data.get('content', b'')
         file_extension = Path(filename).suffix.lower().lstrip('.')
         
         if file_extension in ['png', 'jpg', 'jpeg', 'gif', 'webp']:
-            # This is an image - prepare for Vision API
-            image_data = encode_image_for_claude(file_content_bytes, file_extension)
-            if image_data:
-                image_files.append({
-                    'name': filename,
-                    'data': image_data,
-                    'type': 'image'
-                })
-                logger.info(f"🖼️  {filename}: Prepared for Vision API")
+            # This is an image
+            # Check if content is already base64 string (from frontend) or bytes
+            if isinstance(content, str):
+                # Already base64 from frontend - use directly
+                base64_data = content
+                logger.info(f"🖼️  {filename}: Using pre-encoded base64 from frontend")
             else:
-                logger.warning(f"⚠️  {filename}: Failed to encode image")
+                # Binary bytes - encode it
+                base64_data = base64.standard_b64encode(content).decode('utf-8')
+                logger.info(f"🖼️  {filename}: Encoded binary to base64")
+            
+            # Determine media type
+            media_type_map = {
+                'jpg': 'image/jpeg',
+                'jpeg': 'image/jpeg',
+                'png': 'image/png',
+                'gif': 'image/gif',
+                'webp': 'image/webp'
+            }
+            media_type = media_type_map.get(file_extension.lower(), 'image/jpeg')
+            
+            image_files.append({
+                'name': filename,
+                'data': {
+                    'type': 'image',
+                    'source': {
+                        'type': 'base64',
+                        'media_type': media_type,
+                        'data': base64_data
+                    }
+                },
+                'type': 'image'
+            })
         else:
             # Text document - extract content
             text_files.append(file_data)
