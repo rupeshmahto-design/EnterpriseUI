@@ -529,6 +529,7 @@ async def create_threat_assessment(
                 doc_content = doc.get('content', '')
                 # EXACT formatting from app.py: ### {file.name}\n{content}
                 documents_content += f"\n\n### {doc_name}\n{doc_content}"
+                logger.info(f"  - {doc_name}: {len(doc_content):,} characters")
         
         if not documents_content:
             documents_content = threat_request.system_description or "No system description provided. This is a preliminary threat assessment based on the project information provided."
@@ -536,9 +537,9 @@ async def create_threat_assessment(
         # Log document size for debugging
         doc_chars = len(documents_content)
         doc_tokens_estimate = doc_chars // 4
-        logger.info(f"📄 Documents: {doc_chars:,} characters (~{doc_tokens_estimate:,} tokens)")
+        logger.info(f"📄 Documents total: {doc_chars:,} characters (~{doc_tokens_estimate:,} tokens)")
         logger.info(f"🎯 Framework: {frameworks[0] if frameworks else 'None'}")
-        logger.info(f"🔍 Risk areas: {len(risk_focus_areas)} selected")
+        logger.info(f"🔍 Risk areas: {len(risk_focus_areas)} selected: {risk_focus_areas[:3]}")
         
         # Build project info dict for prompt
         project_info = {
