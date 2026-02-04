@@ -21,7 +21,18 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFilesAdded }) => {
     const files = Array.from(e.target.files);
     const newDocs: ProjectDocument[] = await Promise.all(
       files.map(async (file: File) => {
-        const content = await file.text();
+        // IMPORTANT: Match old Streamlit behavior - only extract text from .txt and .md files
+        // For other file types, just use a placeholder to avoid token limit
+        let content = '';
+        const fileExtension = file.name.toLowerCase().split('.').pop() || '';
+        
+        if (['txt', 'md'].includes(fileExtension)) {
+          // Only read full content for text/markdown files
+          content = await file.text();
+        } else {
+          // For PDFs, DOCX, etc., use placeholder like old Streamlit app
+          content = `[${fileExtension.toUpperCase()} Document: ${file.name}]`;
+        }
         
         let category: any = 'Other';
         const name = file.name.toLowerCase();
