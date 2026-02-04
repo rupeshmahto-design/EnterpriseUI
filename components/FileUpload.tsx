@@ -19,19 +19,41 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFilesAdded }) => {
     if (!e.target.files) return;
 
     const files = Array.from(e.target.files);
+    const token = localStorage.getItem('token');
+    
     const newDocs: ProjectDocument[] = await Promise.all(
       files.map(async (file: File) => {
-        // IMPORTANT: Match old Streamlit behavior - only extract text from .txt and .md files
-        // For other file types, just use a placeholder to avoid token limit
         let content = '';
         const fileExtension = file.name.toLowerCase().split('.').pop() || '';
         
+        // For text/markdown files, read directly in browser
         if (['txt', 'md'].includes(fileExtension)) {
-          // Only read full content for text/markdown files
           content = await file.text();
         } else {
-          // For PDFs, DOCX, etc., use placeholder like old Streamlit app
-          content = `[${fileExtension.toUpperCase()} Document: ${file.name}]`;
+          // For other file types, send to backend for processing
+          try {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            const response = await fetch('/api/process-file', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`
+              },
+              body: formData
+            });
+            
+            if (response.ok) {
+              const result = await response.json();
+              content = result.extracted_text;
+            } else {
+              // Fallback to placeholder if processing fails
+              content = `[${fileExtension.toUpperCase()} Document: ${file.name}]`;
+            }
+          } catch (error) {
+            console.error('File processing error:', error);
+            content = `[${fileExtension.toUpperCase()} Document: ${file.name}]`;
+          }
         }
         
         let category: any = 'Other';
