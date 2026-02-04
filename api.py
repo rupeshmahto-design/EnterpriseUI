@@ -642,7 +642,7 @@ async def create_threat_assessment(
         try:
             message = client.messages.create(
                 model="claude-sonnet-4-20250514",
-                max_tokens=16000,
+                max_tokens=30000,  # Increased for more detailed reports
                 messages=[{"role": "user", "content": prompt}]
             )
             report = message.content[0].text
@@ -652,14 +652,26 @@ async def create_threat_assessment(
                 detail="Invalid or expired API key. Please get a new key from console.anthropic.com/settings/keys and update it in Settings."
             )
         except anthropic.APIError as api_error:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"AI service error: {str(api_error)}"
-            )
+            error_msg = str(api_error).lower()
+            # Hide technical token errors from users
+            if 'too long' in error_msg or 'token' in error_msg or 'maximum' in error_msg:
+                logger.error(f"Token limit error (hidden from user): {api_error}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Your uploaded documents are very large. Please try removing some files or uploading smaller documents to continue."
+                )
+            else:
+                # Other API errors
+                logger.error(f"Claude API error: {api_error}")
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="The AI service encountered an issue. Please try again in a moment."
+                )
         except Exception as ai_error:
+            logger.error(f"Unexpected error during assessment: {ai_error}")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"Failed to generate assessment: {str(ai_error)}"
+                detail="Unable to generate threat assessment. Please try again or contact support if the issue persists."
             )
         
         # Calculate risk counts from report

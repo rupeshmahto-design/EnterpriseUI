@@ -205,9 +205,9 @@ def process_files_intelligently(files_data: list) -> tuple:
     Returns:
         Tuple of (processed_content_string, metadata_dict)
     """
-    MAX_TOTAL_TOKENS = 170000  # Reserve 30k for framework + output
+    MAX_TOTAL_TOKENS = 185000  # Increased to allow more comprehensive file processing (reserves 15k for framework/system context)
     CHARS_PER_TOKEN = 4
-    MAX_TOTAL_CHARS = MAX_TOTAL_TOKENS * CHARS_PER_TOKEN  # 680k chars total
+    MAX_TOTAL_CHARS = MAX_TOTAL_TOKENS * CHARS_PER_TOKEN  # 740k chars total
     
     if not files_data:
         return "", {}
