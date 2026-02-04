@@ -101,7 +101,7 @@ def encode_image_for_claude(file_content: bytes, file_type: str) -> Dict[str, An
         return None
 
 
-def process_file(filename: str, file_content: bytes, use_vision_api: bool = False) -> str:
+def process_file(filename: str, file_content: bytes, use_vision_api: bool = False, max_chars_per_file: int = 100000) -> str:
     """
     Process any file type and extract text content
     
@@ -109,6 +109,7 @@ def process_file(filename: str, file_content: bytes, use_vision_api: bool = Fals
         filename: Name of the file
         file_content: Binary content of the file
         use_vision_api: If True, return image data for Claude Vision API instead of OCR
+        max_chars_per_file: Maximum characters to extract per file (default 100k = ~25k tokens)
         
     Returns:
         Extracted text content or placeholder
@@ -118,23 +119,27 @@ def process_file(filename: str, file_content: bytes, use_vision_api: bool = Fals
         
         # Text files - read directly
         if file_extension in ['txt', 'md', 'csv', 'json', 'xml', 'log']:
-            return file_content.decode('utf-8', errors='ignore')
+            content = file_content.decode('utf-8', errors='ignore')
+            return truncate_content(content, max_chars_per_file)
         
         # PDF files
         elif file_extension == 'pdf':
-            return extract_text_from_pdf(file_content)
+            content = extract_text_from_pdf(file_content)
+            return truncate_content(content, max_chars_per_file)
         
         # Word documents
         elif file_extension in ['docx', 'doc']:
             if file_extension == 'docx':
-                return extract_text_from_docx(file_content)
+                content = extract_text_from_docx(file_content)
+                return truncate_content(content, max_chars_per_file)
             else:
                 return f"[.DOC format not supported. Please convert to .DOCX]"
         
         # Excel files
         elif file_extension in ['xlsx', 'xls']:
             if file_extension == 'xlsx':
-                return extract_text_from_xlsx(file_content)
+                content = extract_text_from_xlsx(file_content)
+                return truncate_content(content, max_chars_per_file)
             else:
                 return f"[.XLS format not supported. Please convert to .XLSX]"
         
@@ -146,7 +151,8 @@ def process_file(filename: str, file_content: bytes, use_vision_api: bool = Fals
             else:
                 # Use OCR
                 ocr_text = extract_text_from_image_ocr(file_content)
-                return f"### Image: {filename}\n[OCR Extracted Text]\n{ocr_text}"
+                content = f"### Image: {filename}\n[OCR Extracted Text]\n{ocr_text}"
+                return truncate_content(content, max_chars_per_file)
         
         # Unsupported formats
         else:
@@ -157,13 +163,11 @@ def process_file(filename: str, file_content: bytes, use_vision_api: bool = Fals
         return f"[Error processing {filename}: {str(e)}]"
 
 
-def truncate_content(content: str, max_tokens: int = 180000) -> str:
+def truncate_content(content: str, max_chars: int) -> str:
     """
-    Truncate content to stay within token limits
-    Rough estimate: 1 token ≈ 4 characters
+    Truncate content to stay within character limits
     """
-    max_chars = max_tokens * 4
     if len(content) > max_chars:
         truncated = content[:max_chars]
-        return f"{truncated}\n\n[Content truncated to fit token limit...]"
+        return f"{truncated}\n\n... [Content truncated - Original: {len(content):,} chars, Showing: {max_chars:,} chars]"
     return content
