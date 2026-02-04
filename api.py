@@ -1419,42 +1419,31 @@ async def get_dashboard_stats(
 
 
 # ==================== FILE PROCESSING ENDPOINT ====================
+# TODO: Enable after dependencies are installed (PyPDF2, python-docx, openpyxl, pytesseract)
+# from fastapi import UploadFile, File
+# from file_processor import process_file
 
-from fastapi import UploadFile, File
-from file_processor import process_file
-
-class FileProcessRequest(BaseModel):
-    use_vision_api: bool = Field(False, description="Use Claude Vision API for images instead of OCR")
-    use_ocr: bool = Field(True, description="Use OCR to extract text from images")
-
-@app.post("/api/process-file")
-async def process_uploaded_file(
-    file: UploadFile = File(...),
-    user: User = Depends(get_current_user_from_token)
-):
-    """
-    Process uploaded file and extract text content
-    Supports: PDF, DOCX, XLSX, TXT, MD, PNG, JPG, etc.
-    """
-    try:
-        # Read file content
-        content = await file.read()
-        
-        # Process the file
-        extracted_text = process_file(file.filename, content, use_vision_api=False)
-        
-        return {
-            "filename": file.filename,
-            "size": len(content),
-            "extracted_text": extracted_text,
-            "char_count": len(extracted_text),
-            "estimated_tokens": len(extracted_text) // 4
-        }
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"File processing error: {str(e)}"
-        )
+# @app.post("/api/process-file")
+# async def process_uploaded_file(
+#     file: UploadFile = File(...),
+#     user: User = Depends(get_current_user_from_token)
+# ):
+#     """Process uploaded file and extract text content"""
+#     try:
+#         content = await file.read()
+#         extracted_text = process_file(file.filename, content, use_vision_api=False)
+#         return {
+#             "filename": file.filename,
+#             "size": len(content),
+#             "extracted_text": extracted_text,
+#             "char_count": len(extracted_text),
+#             "estimated_tokens": len(extracted_text) // 4
+#         }
+#     except Exception as e:
+#         raise HTTPException(
+#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+#             detail=f"File processing error: {str(e)}"
+#         )
 
 # ==================== Static File Serving ====================
 
