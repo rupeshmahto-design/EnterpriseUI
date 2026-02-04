@@ -331,8 +331,52 @@ async def simple_health_check():
 @app.get("/api/health")
 @limiter.limit("60/minute")
 async def health_check(request: Request):
-    """Health check endpoint"""
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+    """Health check endpoint with dependency status"""
+    # Check file processing dependencies
+    deps = {
+        "PyPDF2": False,
+        "python-docx": False,
+        "openpyxl": False,
+        "pytesseract": False,
+        "PIL": False
+    }
+    
+    try:
+        import PyPDF2
+        deps["PyPDF2"] = True
+    except ImportError:
+        pass
+    
+    try:
+        import docx
+        deps["python-docx"] = True
+    except ImportError:
+        pass
+    
+    try:
+        import openpyxl
+        deps["openpyxl"] = True
+    except ImportError:
+        pass
+    
+    try:
+        import pytesseract
+        deps["pytesseract"] = True
+    except ImportError:
+        pass
+    
+    try:
+        from PIL import Image
+        deps["PIL"] = True
+    except ImportError:
+        pass
+    
+    return {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat(),
+        "file_processing_dependencies": deps,
+        "file_processor_available": FILE_PROCESSOR_AVAILABLE
+    }
 
 
 # ===== AUTHENTICATION ENDPOINTS =====
