@@ -1419,31 +1419,64 @@ async def get_dashboard_stats(
 
 
 # ==================== FILE PROCESSING ENDPOINT ====================
-# TODO: Enable after dependencies are installed (PyPDF2, python-docx, openpyxl, pytesseract)
-# from fastapi import UploadFile, File
-# from file_processor import process_file
 
-# @app.post("/api/process-file")
-# async def process_uploaded_file(
-#     file: UploadFile = File(...),
-#     user: User = Depends(get_current_user_from_token)
-# ):
-#     """Process uploaded file and extract text content"""
-#     try:
-#         content = await file.read()
-#         extracted_text = process_file(file.filename, content, use_vision_api=False)
-#         return {
-#             "filename": file.filename,
-#             "size": len(content),
-#             "extracted_text": extracted_text,
-#             "char_count": len(extracted_text),
-#             "estimated_tokens": len(extracted_text) // 4
-#         }
-#     except Exception as e:
-#         raise HTTPException(
-#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-#             detail=f"File processing error: {str(e)}"
-#         )
+from fastapi import UploadFile, File as FastAPIFile
+try:
+    from file_processor import process_file
+    FILE_PROCESSOR_AVAILABLE = True
+except ImportError:
+    FILE_PROCESSOR_AVAILABLE = False
+    logger.warning("File processor not available - dependencies may be missing")
+
+@app.post("/api/process-file")
+async def process_uploaded_file(
+    file: UploadFile = FastAPIFile(...),
+    user: User = Depends(get_current_user_from_token)
+):
+    """
+    Process uploaded file and extract text content
+    Supports: PDF, DOCX, XLSX, TXT, MD, PNG, JPG, etc.
+    """
+    if not FILE_PROCESSOR_AVAILABLE:
+        # Fallback to placeholder if processor not available
+        file_extension = Path(file.filename).suffix.lower().lstrip('.')
+        return {
+            "filename": file.filename,
+            "size": 0,
+            "extracted_text": f"[{file_extension.upper()} Document: {file.filename}]",
+            "char_count": 0,
+            "estimated_tokens": 0,
+            "fallback": True
+        }
+    
+    try:
+        # Read file content
+        content = await file.read()
+        
+        # Process the file
+        extracted_text = process_file(file.filename, content, use_vision_api=False)
+        
+        return {
+            "filename": file.filename,
+            "size": len(content),
+            "extracted_text": extracted_text,
+            "char_count": len(extracted_text),
+            "estimated_tokens": len(extracted_text) // 4,
+            "fallback": False
+        }
+    except Exception as e:
+        logger.error(f"File processing error for {file.filename}: {e}")
+        # Graceful fallback
+        file_extension = Path(file.filename).suffix.lower().lstrip('.')
+        return {
+            "filename": file.filename,
+            "size": len(content) if content else 0,
+            "extracted_text": f"[{file_extension.upper()} Document: {file.filename}]",
+            "char_count": 0,
+            "estimated_tokens": 0,
+            "error": str(e),
+            "fallback": True
+        }
 
 # ==================== Static File Serving ====================
 

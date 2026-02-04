@@ -19,19 +19,50 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFilesAdded }) => {
     if (!e.target.files) return;
 
     const files = Array.from(e.target.files);
+    const token = localStorage.getItem('token');
     
     const newDocs: ProjectDocument[] = await Promise.all(
       files.map(async (file: File) => {
-        // Match old Streamlit behavior - only extract text from .txt and .md files
         let content = '';
         const fileExtension = file.name.toLowerCase().split('.').pop() || '';
         
+        // For text/markdown files, read directly in browser (faster)
         if (['txt', 'md'].includes(fileExtension)) {
-          // Only read full content for text/markdown files
           content = await file.text();
         } else {
-          // For PDFs, DOCX, images etc., use placeholder
-          content = `[${fileExtension.toUpperCase()} Document: ${file.name}]`;
+          // For other file types (PDF, DOCX, XLSX, images), send to backend for processing
+          try {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            const response = await fetch('/api/process-file', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`
+              },
+              body: formData
+            });
+            
+            if (response.ok) {
+              const result = await response.json();
+              content = result.extracted_text;
+              
+              // Log if fallback was used
+              if (result.fallback) {
+                console.log(`Using placeholder for ${file.name} - processing not available`);
+              } else {
+                console.log(`Successfully processed ${file.name}: ${result.char_count} characters`);
+              }
+            } else {
+              // Fallback to placeholder if API fails
+              content = `[${fileExtension.toUpperCase()} Document: ${file.name}]`;
+              console.warn(`Failed to process ${file.name}, using placeholder`);
+            }
+          } catch (error) {
+            console.error('File processing error:', error);
+            // Fallback to placeholder
+            content = `[${fileExtension.toUpperCase()} Document: ${file.name}]`;
+          }
         }
         
         let category: any = 'Other';
