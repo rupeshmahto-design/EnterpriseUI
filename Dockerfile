@@ -14,6 +14,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libffi-dev \
     # PostgreSQL client libs
     libpq-dev \
+    # Tesseract OCR for image text extraction
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    # Image processing libraries
+    libjpeg-dev \
+    libpng-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
