@@ -315,6 +315,67 @@ def process_files_intelligently(files_data: list) -> tuple:
     return combined, metadata
 
 
+def process_files_with_vision(files_data: list) -> tuple:
+    """
+    Process files with Claude Vision API support for images
+    
+    Args:
+        files_data: List of dicts with 'name' and 'content' (bytes)
+        
+    Returns:
+        Tuple of (text_content_string, image_content_list, metadata_dict)
+    """
+    MAX_TOTAL_TOKENS = 185000
+    CHARS_PER_TOKEN = 4
+    MAX_TOTAL_CHARS = MAX_TOTAL_TOKENS * CHARS_PER_TOKEN
+    
+    if not files_data:
+        return "", [], {}
+    
+    # Separate images from text documents
+    text_files = []
+    image_files = []
+    
+    for file_data in files_data:
+        filename = file_data.get('name', 'unknown')
+        file_content_bytes = file_data.get('content', b'')
+        file_extension = Path(filename).suffix.lower().lstrip('.')
+        
+        if file_extension in ['png', 'jpg', 'jpeg', 'gif', 'webp']:
+            # This is an image - prepare for Vision API
+            image_data = encode_image_for_claude(file_content_bytes, file_extension)
+            if image_data:
+                image_files.append({
+                    'name': filename,
+                    'data': image_data,
+                    'type': 'image'
+                })
+                logger.info(f"🖼️  {filename}: Prepared for Vision API")
+            else:
+                logger.warning(f"⚠️  {filename}: Failed to encode image")
+        else:
+            # Text document - extract content
+            text_files.append(file_data)
+    
+    # Process text documents intelligently
+    text_content = ""
+    text_metadata = {}
+    
+    if text_files:
+        text_content, text_metadata = process_files_intelligently(text_files)
+    
+    # Combine metadata
+    metadata = {
+        **text_metadata,
+        'total_images': len(image_files),
+        'image_files': [img['name'] for img in image_files]
+    }
+    
+    logger.info(f"📊 Processing complete: {text_metadata.get('total_files', 0)} text docs, {len(image_files)} images")
+    
+    return text_content, image_files, metadata
+
+
 def truncate_content(content: str, max_chars: int) -> str:
     """
     Truncate content to stay within character limits

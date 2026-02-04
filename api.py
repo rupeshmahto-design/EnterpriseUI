@@ -565,16 +565,17 @@ async def create_threat_assessment(
         compliance_requirements = threat_request.compliance_requirements or []
         risk_focus_areas = threat_request.risk_focus_areas or ['Infrastructure Risk', 'Data Security Risk']
         
-        # Intelligent document processing with smart token distribution
+        # Intelligent document processing with Vision API support for images
         documents_content = ""
+        image_content = []
         doc_metadata = {}
         
         if threat_request.documents and len(threat_request.documents) > 0:
-            logger.info(f"📄 Processing {len(threat_request.documents)} documents with intelligent token distribution...")
+            logger.info(f"📄 Processing {len(threat_request.documents)} documents with Vision API support...")
             
-            # Use intelligent processing if file_processor available
+            # Use intelligent processing with vision support
             try:
-                from file_processor import process_files_intelligently
+                from file_processor import process_files_with_vision
                 
                 # Prepare files for intelligent processing
                 files_data = []
@@ -588,12 +589,12 @@ async def create_threat_assessment(
                         'content': doc_content.encode('utf-8') if isinstance(doc_content, str) else doc_content
                     })
                 
-                documents_content, doc_metadata = process_files_intelligently(files_data)
-                logger.info(f"✅ Intelligent processing complete: {doc_metadata.get('final_total_tokens', 0):,} tokens")
+                documents_content, image_content, doc_metadata = process_files_with_vision(files_data)
+                logger.info(f"✅ Processing complete: {doc_metadata.get('final_total_tokens', 0):,} text tokens + {doc_metadata.get('total_images', 0)} images")
                 
             except ImportError:
                 # Fallback to simple concatenation
-                logger.warning("Intelligent file processor not available, using simple concatenation")
+                logger.warning("Vision file processor not available, using simple concatenation")
                 for doc in threat_request.documents:
                     doc_name = doc.get('name', 'Untitled Document')
                     doc_content = doc.get('content', '')
@@ -638,12 +639,32 @@ async def create_threat_assessment(
         prompt_tokens_estimate = prompt_chars // 4
         logger.info(f"📝 Final prompt: {prompt_chars:,} characters (~{prompt_tokens_estimate:,} tokens)")
         
+        # Build message content - use Vision API if images present
+        if image_content:
+            logger.info(f"🎨 Using Vision API with {len(image_content)} images")
+            # Build multi-part content with text + images
+            message_content = [{"type": "text", "text": prompt}]
+            
+            # Add each image
+            for img in image_content:
+                message_content.append(img['data'])
+                logger.info(f"  📷 Added image: {img['name']}")
+            
+            # Add instruction for image analysis
+            message_content.append({
+                "type": "text",
+                "text": "\n\n**IMPORTANT**: Please analyze ALL uploaded images (architecture diagrams, network diagrams, etc.) and incorporate your visual analysis into the threat assessment. Pay special attention to:\n- System components and their relationships\n- Data flows indicated by arrows\n- Trust boundaries and network segmentation\n- External interfaces and integration points\n- Security controls visible in the diagrams"
+            })
+        else:
+            # Text-only content
+            message_content = prompt
+        
         # Call Claude AI
         try:
             message = client.messages.create(
                 model="claude-sonnet-4-20250514",
                 max_tokens=30000,  # Increased for more detailed reports
-                messages=[{"role": "user", "content": prompt}]
+                messages=[{"role": "user", "content": message_content}]
             )
             report = message.content[0].text
         except anthropic.AuthenticationError as auth_error:
