@@ -582,11 +582,26 @@ async def create_threat_assessment(
                 for doc in threat_request.documents:
                     doc_name = doc.get('name', 'Untitled Document')
                     doc_content = doc.get('content', '')
-                    # If content is already text (from frontend), use it directly
-                    # Otherwise assume it needs processing
+                    
+                    # Determine file type by extension
+                    file_extension = doc_name.lower().split('.')[-1] if '.' in doc_name else ''
+                    is_image = file_extension in ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp']
+                    
+                    # For images, keep base64 as string (don't encode to bytes)
+                    # For text, can be string or bytes
+                    if is_image and isinstance(doc_content, str):
+                        # Image base64 - keep as string
+                        content_to_process = doc_content
+                    elif isinstance(doc_content, str):
+                        # Text content - encode to bytes
+                        content_to_process = doc_content.encode('utf-8')
+                    else:
+                        # Already bytes
+                        content_to_process = doc_content
+                    
                     files_data.append({
                         'name': doc_name,
-                        'content': doc_content.encode('utf-8') if isinstance(doc_content, str) else doc_content
+                        'content': content_to_process
                     })
                 
                 documents_content, image_content, doc_metadata = process_files_with_vision(files_data)
