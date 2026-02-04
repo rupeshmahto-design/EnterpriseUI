@@ -328,6 +328,8 @@ def process_files_with_vision(files_data: list) -> tuple:
     MAX_TOTAL_TOKENS = 185000
     CHARS_PER_TOKEN = 4
     MAX_TOTAL_CHARS = MAX_TOTAL_TOKENS * CHARS_PER_TOKEN
+    MAX_IMAGE_SIZE_MB = 5  # Claude API limit per image
+    MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024
     
     if not files_data:
         return "", [], {}
@@ -345,13 +347,32 @@ def process_files_with_vision(files_data: list) -> tuple:
             # This is an image
             # Check if content is already base64 string (from frontend) or bytes
             if isinstance(content, str):
-                # Already base64 from frontend - use directly
+                # Already base64 from frontend - strip data URI prefix if present
                 base64_data = content
-                logger.info(f"🖼️  {filename}: Using pre-encoded base64 from frontend")
+                # Remove data URI prefix like "data:image/png;base64,"
+                if base64_data.startswith('data:'):
+                    if ';base64,' in base64_data:
+                        base64_data = base64_data.split(';base64,', 1)[1]
+                        logger.info(f"🖼️  {filename}: Stripped data URI prefix from base64")
+                    else:
+                        logger.warning(f"⚠️  {filename}: Data URI found but no base64 marker")
+                else:
+                    logger.info(f"🖼️  {filename}: Using pre-encoded base64 from frontend")
             else:
                 # Binary bytes - encode it
                 base64_data = base64.standard_b64encode(content).decode('utf-8')
                 logger.info(f"🖼️  {filename}: Encoded binary to base64")
+            
+            # Validate base64 data
+            if not base64_data or len(base64_data.strip()) == 0:
+                logger.error(f"❌ {filename}: Empty base64 data, skipping")
+                continue
+            
+            # Check image size (approximate from base64 length)
+            image_size_bytes = len(base64_data) * 3 // 4
+            if image_size_bytes > MAX_IMAGE_SIZE_BYTES:
+                logger.warning(f"⚠️  {filename}: Image too large ({image_size_bytes / 1024 / 1024:.1f}MB > {MAX_IMAGE_SIZE_MB}MB), skipping")
+                continue
             
             # Determine media type
             media_type_map = {
@@ -362,6 +383,9 @@ def process_files_with_vision(files_data: list) -> tuple:
                 'webp': 'image/webp'
             }
             media_type = media_type_map.get(file_extension.lower(), 'image/jpeg')
+            
+            # Log image size for debugging
+            logger.info(f"📷 {filename}: {media_type}, ~{image_size_bytes / 1024:.1f}KB")
             
             image_files.append({
                 'name': filename,
