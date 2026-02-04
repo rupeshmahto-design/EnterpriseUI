@@ -163,6 +163,158 @@ def process_file(filename: str, file_content: bytes, use_vision_api: bool = Fals
         return f"[Error processing {filename}: {str(e)}]"
 
 
+def smart_truncate(content: str, max_chars: int, filename: str = "") -> str:
+    """
+    Intelligently truncate content by keeping important sections
+    - Keeps beginning (context/overview)
+    - Samples middle sections
+    - Keeps end (conclusions)
+    """
+    if len(content) <= max_chars:
+        return content
+    
+    # For very small limits, just take from start
+    if max_chars < 1000:
+        return content[:max_chars] + f"\n\n[Truncated - showing {max_chars:,} of {len(content):,} chars]"
+    
+    # Intelligent distribution:
+    # 50% from beginning (usually has overview/TOC)
+    # 25% from middle (sample content)
+    # 25% from end (conclusions/summary)
+    beginning_size = int(max_chars * 0.5)
+    middle_size = int(max_chars * 0.25)
+    end_size = max_chars - beginning_size - middle_size
+    
+    beginning = content[:beginning_size]
+    middle_start = len(content) // 2 - middle_size // 2
+    middle = content[middle_start:middle_start + middle_size]
+    end = content[-end_size:]
+    
+    truncation_notice = f"\n\n{'='*50}\n[INTELLIGENT TRUNCATION APPLIED]\nOriginal size: {len(content):,} characters\nShowing: {max_chars:,} characters\nDistribution: 50% beginning, 25% middle sample, 25% end\n{'='*50}\n\n"
+    
+    return beginning + truncation_notice + "... [MIDDLE SECTION SAMPLE] ...\n\n" + middle + "\n\n... [END SECTION] ...\n\n" + end
+
+
+def process_files_intelligently(files_data: list) -> tuple:
+    """
+    Intelligently process multiple files with smart token distribution
+    
+    Args:
+        files_data: List of dicts with 'name' and 'content' (bytes)
+        
+    Returns:
+        Tuple of (processed_content_string, metadata_dict)
+    """
+    MAX_TOTAL_TOKENS = 170000  # Reserve 30k for framework + output
+    CHARS_PER_TOKEN = 4
+    MAX_TOTAL_CHARS = MAX_TOTAL_TOKENS * CHARS_PER_TOKEN  # 680k chars total
+    
+    if not files_data:
+        return "", {}
+    
+    # First pass: Extract and measure all files
+    extracted_files = []
+    for file_data in files_data:
+        filename = file_data.get('name', 'unknown')
+        file_content_bytes = file_data.get('content', b'')
+        
+        # Extract text
+        extracted_text = process_file(filename, file_content_bytes, use_vision_api=False, max_chars_per_file=999999999)
+        
+        extracted_files.append({
+            'name': filename,
+            'content': extracted_text,
+            'size': len(extracted_text),
+            'tokens': len(extracted_text) // CHARS_PER_TOKEN
+        })
+    
+    # Calculate total size
+    total_size = sum(f['size'] for f in extracted_files)
+    total_tokens = total_size // CHARS_PER_TOKEN
+    
+    logger.info(f"📊 File Analysis: {len(extracted_files)} files, {total_size:,} chars (~{total_tokens:,} tokens)")
+    
+    # If under limit, return everything
+    if total_size <= MAX_TOTAL_CHARS:
+        logger.info("✅ All files fit within token limit - no truncation needed")
+        combined = "\n\n".join([f"### {f['name']}\n{f['content']}" for f in extracted_files])
+        return combined, {
+            'total_files': len(extracted_files),
+            'total_chars': total_size,
+            'total_tokens': total_tokens,
+            'truncated': False
+        }
+    
+    # Smart distribution: prioritize smaller files
+    logger.info(f"⚠️ Total content ({total_tokens:,} tokens) exceeds limit ({MAX_TOTAL_TOKENS:,} tokens)")
+    logger.info("🧠 Applying intelligent token distribution...")
+    
+    # Sort by size (smallest first - keep these intact)
+    sorted_files = sorted(extracted_files, key=lambda x: x['size'])
+    
+    processed_files = []
+    remaining_chars = MAX_TOTAL_CHARS
+    
+    for file_info in sorted_files:
+        filename = file_info['name']
+        content = file_info['content']
+        size = file_info['size']
+        
+        if size <= remaining_chars:
+            # File fits completely
+            processed_files.append({
+                'name': filename,
+                'content': content,
+                'truncated': False,
+                'original_size': size,
+                'final_size': size
+            })
+            remaining_chars -= size
+            logger.info(f"  ✓ {filename}: {size:,} chars (complete)")
+        else:
+            # Need to truncate this file
+            if remaining_chars > 10000:  # Only include if we have meaningful space
+                truncated = smart_truncate(content, remaining_chars, filename)
+                processed_files.append({
+                    'name': filename,
+                    'content': truncated,
+                    'truncated': True,
+                    'original_size': size,
+                    'final_size': len(truncated)
+                })
+                logger.info(f"  ⚡ {filename}: {size:,} → {len(truncated):,} chars (truncated)")
+                remaining_chars = 0
+            else:
+                # Not enough space, use placeholder
+                placeholder = f"[Large file truncated due to token limits: {filename} - {size:,} chars]"
+                processed_files.append({
+                    'name': filename,
+                    'content': placeholder,
+                    'truncated': True,
+                    'original_size': size,
+                    'final_size': len(placeholder)
+                })
+                logger.info(f"  ⊘ {filename}: {size:,} chars (placeholder only)")
+    
+    # Combine all processed content
+    combined = "\n\n".join([f"### {f['name']}\n{f['content']}" for f in processed_files])
+    
+    metadata = {
+        'total_files': len(extracted_files),
+        'files_complete': sum(1 for f in processed_files if not f['truncated']),
+        'files_truncated': sum(1 for f in processed_files if f['truncated']),
+        'original_total_chars': total_size,
+        'original_total_tokens': total_tokens,
+        'final_total_chars': len(combined),
+        'final_total_tokens': len(combined) // CHARS_PER_TOKEN,
+        'truncated': True
+    }
+    
+    logger.info(f"📦 Final: {metadata['final_total_tokens']:,} tokens ({metadata['files_complete']} complete, {metadata['files_truncated']} truncated)")
+    
+    return combined, metadata
+
+
 def truncate_content(content: str, max_chars: int) -> str:
     """
     Truncate content to stay within character limits

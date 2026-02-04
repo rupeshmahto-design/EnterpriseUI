@@ -565,15 +565,40 @@ async def create_threat_assessment(
         compliance_requirements = threat_request.compliance_requirements or []
         risk_focus_areas = threat_request.risk_focus_areas or ['Infrastructure Risk', 'Data Security Risk']
         
-        # Build system description from documents - EXACT format from original app.py
+        # Intelligent document processing with smart token distribution
         documents_content = ""
-        if threat_request.documents:
-            for doc in threat_request.documents:
-                doc_name = doc.get('name', 'Untitled Document')
-                doc_content = doc.get('content', '')
-                # EXACT formatting from app.py: ### {file.name}\n{content}
-                documents_content += f"\n\n### {doc_name}\n{doc_content}"
-                logger.info(f"  - {doc_name}: {len(doc_content):,} characters")
+        doc_metadata = {}
+        
+        if threat_request.documents and len(threat_request.documents) > 0:
+            logger.info(f"📄 Processing {len(threat_request.documents)} documents with intelligent token distribution...")
+            
+            # Use intelligent processing if file_processor available
+            try:
+                from file_processor import process_files_intelligently
+                
+                # Prepare files for intelligent processing
+                files_data = []
+                for doc in threat_request.documents:
+                    doc_name = doc.get('name', 'Untitled Document')
+                    doc_content = doc.get('content', '')
+                    # If content is already text (from frontend), use it directly
+                    # Otherwise assume it needs processing
+                    files_data.append({
+                        'name': doc_name,
+                        'content': doc_content.encode('utf-8') if isinstance(doc_content, str) else doc_content
+                    })
+                
+                documents_content, doc_metadata = process_files_intelligently(files_data)
+                logger.info(f"✅ Intelligent processing complete: {doc_metadata.get('final_total_tokens', 0):,} tokens")
+                
+            except ImportError:
+                # Fallback to simple concatenation
+                logger.warning("Intelligent file processor not available, using simple concatenation")
+                for doc in threat_request.documents:
+                    doc_name = doc.get('name', 'Untitled Document')
+                    doc_content = doc.get('content', '')
+                    documents_content += f"\n\n### {doc_name}\n{doc_content}"
+                    logger.info(f"  - {doc_name}: {len(doc_content):,} characters")
         
         if not documents_content:
             documents_content = threat_request.system_description or "No system description provided. This is a preliminary threat assessment based on the project information provided."
