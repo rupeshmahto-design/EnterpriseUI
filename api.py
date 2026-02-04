@@ -674,6 +674,18 @@ async def create_threat_assessment(
             )
         except anthropic.APIError as api_error:
             error_msg = str(api_error).lower()
+            # Log full error details for debugging
+            logger.error(f"Claude API error details: {api_error}")
+            logger.error(f"Error type: {type(api_error).__name__}")
+            
+            # Check for image processing errors
+            if 'image' in error_msg or 'could not process' in error_msg:
+                logger.error(f"Image processing error detected. Number of images sent: {len(image_content) if image_content else 0}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Unable to process uploaded images. Please ensure images are valid PNG/JPG files under 5MB and try again."
+                )
+            
             # Hide technical token errors from users
             if 'too long' in error_msg or 'token' in error_msg or 'maximum' in error_msg:
                 logger.error(f"Token limit error (hidden from user): {api_error}")
@@ -682,11 +694,11 @@ async def create_threat_assessment(
                     detail="Your uploaded documents are very large. Please try removing some files or uploading smaller documents to continue."
                 )
             else:
-                # Other API errors
+                # Other API errors - provide more context
                 logger.error(f"Claude API error: {api_error}")
                 raise HTTPException(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail="The AI service encountered an issue. Please try again in a moment."
+                    detail=f"The AI service encountered an issue. Error: {str(api_error)[:100]}. Please try again or contact support."
                 )
         except Exception as ai_error:
             logger.error(f"Unexpected error during assessment: {ai_error}")
