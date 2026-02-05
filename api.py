@@ -583,6 +583,11 @@ async def create_threat_assessment(
                     doc_name = doc.get('name', 'Untitled Document')
                     doc_content = doc.get('content', '')
                     
+                    # Debug: Check what type we're receiving
+                    print(f"📦 DEBUG {doc_name}: type={type(doc_content).__name__}, len={len(doc_content) if doc_content else 0}")
+                    if isinstance(doc_content, str) and len(doc_content) > 0:
+                        print(f"   First 50 chars: {doc_content[:50]}")
+                    
                     # Determine file type by extension
                     file_extension = doc_name.lower().split('.')[-1] if '.' in doc_name else ''
                     is_image = file_extension in ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp']
@@ -592,12 +597,15 @@ async def create_threat_assessment(
                     if is_image and isinstance(doc_content, str):
                         # Image base64 - keep as string
                         content_to_process = doc_content
+                        print(f"   ✅ Keeping image as base64 string")
                     elif isinstance(doc_content, str):
                         # Text content - encode to bytes
                         content_to_process = doc_content.encode('utf-8')
+                        print(f"   ✅ Encoded text to UTF-8 bytes")
                     else:
                         # Already bytes
                         content_to_process = doc_content
+                        print(f"   ⚠️  Content is already bytes")
                     
                     files_data.append({
                         'name': doc_name,
